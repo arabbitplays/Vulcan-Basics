@@ -21,6 +21,7 @@
 #include <tiny_obj_loader.h>
 #include <unordered_map>
 #include "Vertex.hpp"
+#include "PipelineBuilder.hpp"
 
 //#define VERBOSE
 
@@ -161,7 +162,7 @@ private:
         createImageViews();
         createRenderPass();
         createDescriptorSetLayout();
-        createGraphicsPipeline();
+        createPipeline2();
 
         createCommandPool();
         createDepthResources();
@@ -720,18 +721,6 @@ private:
         inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = (float) swapChainExtent.width;
-        viewport.height = (float) swapChainExtent.height;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-
-        VkRect2D scissor{};
-        scissor.offset = {0,0};
-        scissor.extent = swapChainExtent;
-
         VkPipelineViewportStateCreateInfo viewportState{};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportState.viewportCount = 1;
@@ -742,7 +731,7 @@ private:
         rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         rasterizer.depthClampEnable = VK_FALSE;
         rasterizer.rasterizerDiscardEnable = VK_FALSE;
-        rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizer.lineWidth = 1.0f;
         rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
         rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
@@ -804,6 +793,30 @@ private:
                                       &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
             throw std::runtime_error("failed to create graphics pipeline!");
         }
+
+        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        vkDestroyShaderModule(device, fragShaderModule, nullptr);
+    }
+
+    void createPipeline2() {
+        auto vertShaderCode = readFile("shaders/vert.spv");
+        auto fragShaderCode = readFile("shaders/frag.spv");
+
+        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+        PipelineBuilder pipelineBuilder{};
+        pipelineBuilder.setShaders(vertShaderModule, fragShaderModule);
+        pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+        pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+        pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+        pipelineBuilder.setMultisamplingNone();
+        pipelineBuilder.setDepthStencil();
+        pipelineBuilder.disableColorBlending();
+        std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { descriptorSetLayout };
+        pipelineBuilder.setDescriptorSetLayout(descriptorSetLayout);
+
+        pipelineBuilder.buildPipeline(device, renderPass, &graphicsPipeline, &pipelineLayout);
 
         vkDestroyShaderModule(device, vertShaderModule, nullptr);
         vkDestroyShaderModule(device, fragShaderModule, nullptr);

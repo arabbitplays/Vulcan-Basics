@@ -10,6 +10,8 @@ find_package(stb REQUIRED)
 find_package(tinyobjloader)
 
 add_executable(${PROJECT_NAME} src/main.cpp
-        src/Vertex.hpp)
+        src/Vertex.hpp
+        src/PipelineBuilder.cpp
+        src/PipelineBuilder.hpp)
 
 target_link_libraries(${PROJECT_NAME} glfw glm::glm Vulkan::Vulkan stb::stb tinyobjloader::tinyobjloader)
