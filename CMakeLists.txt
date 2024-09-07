@@ -14,6 +14,10 @@ add_executable(${PROJECT_NAME} src/main.cpp
         src/PipelineBuilder.cpp
         src/PipelineBuilder.hpp
         src/DescriptorAllocator.cpp
-        src/DescriptorAllocator.hpp)
+        src/DescriptorAllocator.hpp
+        src/MeshAssetBuilder.cpp
+        src/MeshAssetBuilder.hpp
+        src/CommandManager.cpp
+        src/CommandManager.hpp)
 
 target_link_libraries(${PROJECT_NAME} glfw glm::glm Vulkan::Vulkan stb::stb tinyobjloader::tinyobjloader)
