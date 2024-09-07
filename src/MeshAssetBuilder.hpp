@@ -33,8 +33,10 @@ public:
         MeshBuffers meshBuffers;
     };
 
+    MeshAssetBuilder() = default;
     MeshAssetBuilder(VkPhysicalDevice physicalDevice, VkDevice device, CommandManager commandManager);
     MeshAsset LoadMeshAsset(std::string path);
+    void destroyMeshAsset(MeshAsset meshAsset);
 
 private:
     void loadModel(std::string path, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);

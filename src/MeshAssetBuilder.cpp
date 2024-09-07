@@ -25,7 +25,7 @@ MeshAssetBuilder::MeshAsset MeshAssetBuilder::LoadMeshAsset(std::string path) {
     MeshAsset meshAsset{};
     meshAsset.meshBuffers = meshBuffers;
     std::vector<MeshSurface> surfaces;
-    surfaces.push_back({0, 2});
+    surfaces.push_back({0, static_cast<uint32_t>(indices.size())});
     meshAsset.surfaces = surfaces;
 
     return meshAsset;
@@ -171,4 +171,9 @@ void MeshAssetBuilder::copyBuffer(MeshAssetBuilder::AllocatedBuffer src, MeshAss
 void MeshAssetBuilder::destroyBuffer(AllocatedBuffer buffer) {
     vkDestroyBuffer(device, buffer.buffer, nullptr);
     vkFreeMemory(device, buffer.bufferMemory, nullptr);
+}
+
+void MeshAssetBuilder::destroyMeshAsset(MeshAssetBuilder::MeshAsset meshAsset) {
+    destroyBuffer(meshAsset.meshBuffers.vertexBuffer);
+    destroyBuffer(meshAsset.meshBuffers.indexBuffer);
 }

@@ -24,6 +24,7 @@
 #include "PipelineBuilder.hpp"
 #include "DescriptorAllocator.hpp"
 #include "CommandManager.hpp"
+#include "MeshAssetBuilder.hpp"
 
 //#define VERBOSE
 
@@ -112,15 +113,14 @@ private:
     CommandManager commandManager;
     std::vector<VkCommandBuffer> commandBuffers;
 
+    MeshAssetBuilder meshAssetBuilder;
+    MeshAssetBuilder::MeshAsset meshAsset;
+
     VkImage textureImage;
     VkDeviceMemory textureImageMemory;
     VkImageView textureImageView;
     VkSampler textureSampler;
 
-    VkBuffer vertexBuffer;
-    VkDeviceMemory vertexBufferMemory;
-    VkBuffer indexBuffer;
-    VkDeviceMemory indexBufferMemory;
     std::vector<VkBuffer> uniformBuffers;
     std::vector<VkDeviceMemory> uniformBuffersMemory;
     std::vector<void*> uniformBuffersMapped;
@@ -134,9 +134,6 @@ private:
 
     uint32_t currentFrame = 0;
     bool framebufferResized = false;
-
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
 
     void initWindow() {
         glfwInit();
@@ -172,9 +169,7 @@ private:
         createTextureImageView();
         createTextureSampler();
 
-        loadModel();
-        createVertexBuffer();
-        createIndexBuffer();
+        loadMeshes();
         createUniformBuffers();
         createDescriptorAllocator();
         createDescriptorSets();
@@ -972,95 +967,10 @@ private:
         }
     }
 
-    void loadModel() {
-        tinyobj::attrib_t attrib;
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
-        std::string warn, err;
-
-        std::cout << "Load model " << MODEL_PATH << std::endl;
-
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
-            throw std::runtime_error("warn + err");
-        }
-
-        std::unordered_map<Vertex, uint32_t> uniqueVertices{};
-
-        for (const auto& shape : shapes) {
-            for (const auto& index : shape.mesh.indices) {
-                Vertex vertex{};
-
-                vertex.pos = {
-                        attrib.vertices[3 * index.vertex_index + 0],
-                        attrib.vertices[3 * index.vertex_index + 1],
-                        attrib.vertices[3 * index.vertex_index + 2]
-                };
-
-                vertex.texCoord = {
-                        attrib.texcoords[2 * index.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-                };
-
-                vertex.color = {1.0f, 1.0f, 1.0f};
-
-                if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-                    vertices.push_back(vertex);
-                }
-
-                indices.push_back(uniqueVertices[vertex]);
-            }
-        }
-
-        std::cout << "Finished loading model!" << std::endl;
-    }
-
-    void createVertexBuffer() {
-        VkDeviceSize size = sizeof(vertices[0]) * vertices.size();
-
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        createBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-                     , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-                     , stagingBuffer, stagingBufferMemory);
-
-        void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, size, 0, &data);
-        memcpy(data, vertices.data(), (size_t) size);
-        vkUnmapMemory(device, stagingBufferMemory);
-
-        createBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                     vertexBuffer, vertexBufferMemory);
-
-        copyBuffer(stagingBuffer, vertexBuffer, size);
-
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
-    }
-
-    void createIndexBuffer() {
-        VkDeviceSize size = sizeof(indices[0]) * indices.size();
-
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        createBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-                , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-                , stagingBuffer, stagingBufferMemory);
-
-        void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, size, 0, &data);
-        memcpy(data, indices.data(), (size_t) size);
-        vkUnmapMemory(device, stagingBufferMemory);
-
-        createBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                     indexBuffer, indexBufferMemory);
-
-        copyBuffer(stagingBuffer, indexBuffer, size);
-
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
+    void loadMeshes() {
+        auto pMeshAssetBuilder = new MeshAssetBuilder(physicalDevice, device, commandManager);
+        meshAssetBuilder = *pMeshAssetBuilder;
+        meshAsset = meshAssetBuilder.LoadMeshAsset(MODEL_PATH);
     }
 
     void createUniformBuffers() {
@@ -1323,11 +1233,11 @@ private:
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-        VkBuffer vertexBuffers[] = {vertexBuffer};
+        VkBuffer vertexBuffers[] = {meshAsset.meshBuffers.vertexBuffer.buffer};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-        vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, meshAsset.meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 pipelineLayout, 0, 1,
@@ -1347,7 +1257,7 @@ private:
         scissor.extent = swapChainExtent;
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        vkCmdDrawIndexed(commandBuffer, static_cast<int32_t>(indices.size()), 1, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, meshAsset.surfaces[0].count, 1, meshAsset.surfaces[0].startIndex, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1374,11 +1284,7 @@ private:
         descriptorAllocator.destroyPools(device);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
-        vkDestroyBuffer(device, vertexBuffer, nullptr);
-        vkFreeMemory(device, vertexBufferMemory, nullptr);
-        vkDestroyBuffer(device, indexBuffer, nullptr);
-        vkFreeMemory(device, indexBufferMemory, nullptr);
-
+        meshAssetBuilder.destroyMeshAsset(meshAsset);
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
             vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
