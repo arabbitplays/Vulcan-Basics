@@ -2,7 +2,7 @@
 #include "PipelineBuilder.hpp"
 #include "../Vertex.hpp"
 
-void PipelineBuilder::buildPipeline(VkDevice& device, VkRenderPass& renderPass, VkPipeline* pipeline, VkPipelineLayout* pipelineLayout) {
+void PipelineBuilder::buildPipeline(VkDevice& device, VkRenderPass& renderPass, VkPipeline* pipeline, VkPipelineLayout& pipelineLayout) {
 
     std::vector<VkDynamicState> dynamicStates = {
             VK_DYNAMIC_STATE_VIEWPORT,
@@ -42,10 +42,6 @@ void PipelineBuilder::buildPipeline(VkDevice& device, VkRenderPass& renderPass, 
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, pipelineLayout) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create pipeline layout!");
-    }
-
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
@@ -58,7 +54,7 @@ void PipelineBuilder::buildPipeline(VkDevice& device, VkRenderPass& renderPass, 
     pipelineInfo.pDepthStencilState = &depthStencilInfo;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = *pipelineLayout;
+    pipelineInfo.layout = pipelineLayout;
     pipelineInfo.renderPass = renderPass;
     pipelineInfo.subpass = 0;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
@@ -67,6 +63,12 @@ void PipelineBuilder::buildPipeline(VkDevice& device, VkRenderPass& renderPass, 
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1,
                                   &pipelineInfo, nullptr, pipeline) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics pipeline!");
+    }
+}
+
+void PipelineBuilder::buildPipelineLayout(VkDevice& device, VkPipelineLayout* pipelineLayout) {
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, pipelineLayout) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create pipeline layout!");
     }
 }
 
@@ -106,10 +108,10 @@ void PipelineBuilder::setMultisamplingNone() {
     multisamplingInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 }
 
-void PipelineBuilder::setDepthStencil() {
-    depthStencilInfo.depthTestEnable = VK_TRUE;
-    depthStencilInfo.depthWriteEnable = VK_TRUE;
-    depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS;
+void PipelineBuilder::enableDepthTest(VkBool32 enabled, VkCompareOp compareOp) {
+    depthStencilInfo.depthTestEnable = enabled;
+    depthStencilInfo.depthWriteEnable = enabled;
+    depthStencilInfo.depthCompareOp = compareOp;
     depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
 }
 
@@ -119,9 +121,22 @@ void PipelineBuilder::disableColorBlending() {
     colorBlendAttachment.blendEnable = VK_FALSE;
 }
 
-void PipelineBuilder::setDescriptorSetLayout(VkDescriptorSetLayout& descriptorSetLayout) {
+void PipelineBuilder::enableAdditiveBlending() {
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+                                          | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_TRUE;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+}
+
+void PipelineBuilder::setDescriptorSetLayouts(VkDescriptorSetLayout* descriptorSetLayouts) {
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts;
 }
 
 void PipelineBuilder::clear() {

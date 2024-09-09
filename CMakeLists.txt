@@ -9,7 +9,7 @@ find_package(Vulkan REQUIRED)
 find_package(stb REQUIRED)
 find_package(tinyobjloader)
 
-add_executable(${PROJECT_NAME} src/main.cpp
+add_executable(${PROJECT_NAME} src/VulkanEngine.cpp
         src/Vertex.hpp
         src/builders/PipelineBuilder.cpp
         src/builders/PipelineBuilder.hpp
@@ -25,6 +25,11 @@ add_executable(${PROJECT_NAME} src/main.cpp
         src/rendering/materials/Metallic_Roughness.hpp
         src/VulkanUtil.hpp
         src/builders/DescriptorLayoutBuilder.cpp
-        src/builders/DescriptorLayoutBuilder.hpp)
+        src/builders/DescriptorLayoutBuilder.hpp
+        src/main.cpp
+        src/VulkanEngine.hpp
+        src/builders/RenderPassBuilder.cpp
+        src/builders/RenderPassBuilder.hpp
+)
 
 target_link_libraries(${PROJECT_NAME} glfw glm::glm Vulkan::Vulkan stb::stb tinyobjloader::tinyobjloader)
