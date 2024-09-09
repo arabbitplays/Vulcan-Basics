@@ -11,13 +11,20 @@ find_package(tinyobjloader)
 
 add_executable(${PROJECT_NAME} src/main.cpp
         src/Vertex.hpp
-        src/PipelineBuilder.cpp
-        src/PipelineBuilder.hpp
+        src/builders/PipelineBuilder.cpp
+        src/builders/PipelineBuilder.hpp
         src/DescriptorAllocator.cpp
         src/DescriptorAllocator.hpp
-        src/MeshAssetBuilder.cpp
-        src/MeshAssetBuilder.hpp
+        src/builders/MeshAssetBuilder.cpp
+        src/builders/MeshAssetBuilder.hpp
         src/CommandManager.cpp
-        src/CommandManager.hpp)
+        src/CommandManager.hpp
+        src/builders/RessourceBuilder.cpp
+        src/builders/RessourceBuilder.hpp
+        src/rendering/IRenderable.hpp
+        src/rendering/materials/Metallic_Roughness.hpp
+        src/VulkanUtil.hpp
+        src/builders/DescriptorLayoutBuilder.cpp
+        src/builders/DescriptorLayoutBuilder.hpp)
 
 target_link_libraries(${PROJECT_NAME} glfw glm::glm Vulkan::Vulkan stb::stb tinyobjloader::tinyobjloader)

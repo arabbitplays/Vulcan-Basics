@@ -1,6 +1,6 @@
 #include <string>
 #include "PipelineBuilder.hpp"
-#include "Vertex.hpp"
+#include "../Vertex.hpp"
 
 void PipelineBuilder::buildPipeline(VkDevice& device, VkRenderPass& renderPass, VkPipeline* pipeline, VkPipelineLayout* pipelineLayout) {
 

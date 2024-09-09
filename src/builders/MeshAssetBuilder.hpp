@@ -8,16 +8,12 @@
 
 #include <vulkan/vulkan.h>
 #include <vector>
-#include "CommandManager.hpp"
-#include "Vertex.hpp"
+#include "../CommandManager.hpp"
+#include "../Vertex.hpp"
+#include "RessourceBuilder.hpp"
 
 class MeshAssetBuilder {
 public:
-    struct AllocatedBuffer {
-        VkBuffer buffer;
-        VkDeviceMemory bufferMemory;
-    };
-
     struct MeshBuffers {
         AllocatedBuffer vertexBuffer;
         AllocatedBuffer indexBuffer;
@@ -34,7 +30,7 @@ public:
     };
 
     MeshAssetBuilder() = default;
-    MeshAssetBuilder(VkPhysicalDevice physicalDevice, VkDevice device, CommandManager commandManager);
+    MeshAssetBuilder(VkDevice device, RessourceBuilder bufferBuilder);
     MeshAsset LoadMeshAsset(std::string path);
     void destroyMeshAsset(MeshAsset meshAsset);
 
@@ -42,14 +38,9 @@ private:
     void loadModel(std::string path, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
     AllocatedBuffer createVertexBuffer(std::vector<Vertex> vertices);
     AllocatedBuffer createIndexBuffer(std::vector<uint32_t> indices);
-    AllocatedBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
-    void copyBuffer(AllocatedBuffer src, AllocatedBuffer dst, VkDeviceSize size);
-    void destroyBuffer(AllocatedBuffer buffer);
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
-    VkPhysicalDevice physicalDevice;
     VkDevice device;
-    CommandManager commandManager;
+    RessourceBuilder bufferBuilder;
 };
 
 

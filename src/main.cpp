@@ -21,10 +21,12 @@
 #include <tiny_obj_loader.h>
 #include <unordered_map>
 #include "Vertex.hpp"
-#include "PipelineBuilder.hpp"
+#include "builders/PipelineBuilder.hpp"
 #include "DescriptorAllocator.hpp"
 #include "CommandManager.hpp"
-#include "MeshAssetBuilder.hpp"
+#include "builders/MeshAssetBuilder.hpp"
+#include "VulkanUtil.hpp"
+#include "builders/DescriptorLayoutBuilder.hpp"
 
 //#define VERBOSE
 
@@ -100,9 +102,7 @@ private:
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent;
 
-    VkImage depthImage;
-    VkDeviceMemory depthImageMemory;
-    VkImageView depthImageView;
+    AllocatedImage depthImage;
 
     VkRenderPass renderPass;
     VkDescriptorSetLayout descriptorSetLayout;
@@ -113,16 +113,14 @@ private:
     CommandManager commandManager;
     std::vector<VkCommandBuffer> commandBuffers;
 
+    RessourceBuilder ressourceBuilder;
     MeshAssetBuilder meshAssetBuilder;
     MeshAssetBuilder::MeshAsset meshAsset;
 
-    VkImage textureImage;
-    VkDeviceMemory textureImageMemory;
-    VkImageView textureImageView;
+    AllocatedImage textureImage;
     VkSampler textureSampler;
 
-    std::vector<VkBuffer> uniformBuffers;
-    std::vector<VkDeviceMemory> uniformBuffersMemory;
+    std::vector<AllocatedBuffer> uniformBuffers;
     std::vector<void*> uniformBuffersMapped;
 
     DescriptorAllocator descriptorAllocator;
@@ -157,16 +155,17 @@ private:
         pickPhysicalDevice();
         createLogicalDevice();
 
+        createCommandManager();
+        createRessourceBuilder();
+
         createSwapChain();
         createImageViews();
         createRenderPass();
         createDescriptorSetLayout();
         createGraphicsPipeline();
 
-        createCommandManager();
         createDepthResources();
         createTextureImage();
-        createTextureImageView();
         createTextureSampler();
 
         loadMeshes();
@@ -575,7 +574,7 @@ private:
     void createImageViews() {
         swapChainImageViews.resize(swapChainImages.size());
         for (size_t i = 0; i < swapChainImageViews.size(); i++) {
-            swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+            swapChainImageViews[i] = ressourceBuilder.createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
         }
     }
 
@@ -638,37 +637,16 @@ private:
     }
 
     void createDescriptorSetLayout() {
-        VkDescriptorSetLayoutBinding uboLayoutBinding;
-        uboLayoutBinding.binding = 0;
-        uboLayoutBinding.descriptorCount = 1;
-        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        DescriptorLayoutBuilder layoutBuilder;
+        layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        descriptorSetLayout = layoutBuilder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-        VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-        samplerLayoutBinding.binding = 1;
-        samplerLayoutBinding.descriptorCount = 1;
-        samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        samplerLayoutBinding.pImmutableSamplers = nullptr;
-        samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-        std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
-
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-        layoutInfo.pBindings = bindings.data();
-
-        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create descriptor set layout!");
-        }
     }
 
     void createGraphicsPipeline() {
-        auto vertShaderCode = readFile("shaders/vert.spv");
-        auto fragShaderCode = readFile("shaders/frag.spv");
-
-        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+        VkShaderModule vertShaderModule = VulkanUtil::createShaderModule(device, "shaders/vert.spv");
+        VkShaderModule fragShaderModule = VulkanUtil::createShaderModule(device, "shaders/frag.spv");
 
         PipelineBuilder pipelineBuilder{};
         pipelineBuilder.setShaders(vertShaderModule, fragShaderModule);
@@ -687,25 +665,12 @@ private:
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
     }
 
-    VkShaderModule createShaderModule(const std::vector<char>& code) {
-        VkShaderModuleCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size();
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-        VkShaderModule shaderModule;
-        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create shader module!");
-        }
-        return shaderModule;
-    }
-
     void createFrameBuffers() {
         swapChainFrameBuffers.resize(swapChainImageViews.size());
         for (size_t i = 0; i < swapChainFrameBuffers.size(); i++) {
             std::array<VkImageView, 2> attachments {
                 swapChainImageViews[i],
-                depthImageView
+                depthImage.imageView
             };
 
             VkFramebufferCreateInfo framebufferInfo{};
@@ -728,13 +693,17 @@ private:
         commandManager = *pCommandManager;
     }
 
+    void createRessourceBuilder() {
+        auto pRessourceBuilder = new RessourceBuilder(physicalDevice, device, commandManager);
+        ressourceBuilder = *pRessourceBuilder;
+    }
+
     void createDepthResources() {
         VkFormat depthFormat = findDepthFormat();
 
-        createImage(swapChainExtent.width, swapChainExtent.height, depthFormat,
-                    VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
-        depthImageView = createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+        depthImage = ressourceBuilder.createImage(swapChainExtent.width, swapChainExtent.height, depthFormat,
+                                                  VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
     }
 
     VkFormat findDepthFormat() {
@@ -772,76 +741,31 @@ private:
             throw std::runtime_error("failed to load texture image!");
         }
 
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-
-        createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                     stagingBuffer, stagingBufferMemory);
+        AllocatedBuffer stagingBuffer = ressourceBuilder.createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
         void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+        vkMapMemory(device, stagingBuffer.bufferMemory, 0, imageSize, 0, &data);
         memcpy(data, pixels, static_cast<size_t>(imageSize));
-        vkUnmapMemory(device, stagingBufferMemory);
+        vkUnmapMemory(device, stagingBuffer.bufferMemory);
 
         stbi_image_free(pixels);
 
-        createImage(static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight),
-                    VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+        textureImage = ressourceBuilder.createImage(static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight),
+                                                    VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
                     VK_BUFFER_USAGE_2_TRANSFER_DST_BIT_KHR | VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                    textureImage, textureImageMemory);
+                                                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
-        transitionImageLayout(textureImage, VK_FORMAT_R8G8B8_SRGB,
+        transitionImageLayout(textureImage.image, VK_FORMAT_R8G8B8_SRGB,
                               VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        copyBufferToImage(stagingBuffer, textureImage,
+        copyBufferToImage(stagingBuffer.buffer, textureImage.image,
                           static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-        transitionImageLayout(textureImage, VK_FORMAT_R8G8B8_SRGB,
+        transitionImageLayout(textureImage.image, VK_FORMAT_R8G8B8_SRGB,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
-    }
-
-    void createImage(uint32_t width, uint32_t height,
-                     VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-                     VkMemoryPropertyFlags properties,
-                     VkImage& image, VkDeviceMemory& imageMemory) {
-        VkImageCreateInfo imageInfo{};
-        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.extent.width = width;
-        imageInfo.extent.height = height;
-        imageInfo.extent.depth = 1;
-        imageInfo.mipLevels = 1;
-        imageInfo.arrayLayers = 1;
-        imageInfo.format = format;
-        imageInfo.tiling = tiling;
-        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageInfo.usage = usage;
-        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-        if (vkCreateImage(device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create image!");
-        }
-
-        VkMemoryRequirements memRequirements;
-        vkGetImageMemoryRequirements(device, image, &memRequirements);
-
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits,
-                                                   properties);
-
-        if (vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
-            throw std::runtime_error("failed to allocate texture image memory!");
-        }
-
-        vkBindImageMemory(device, image, imageMemory, 0);
+        ressourceBuilder.destroyBuffer(stagingBuffer);
     }
 
     void transitionImageLayout(VkImage image, VkFormat format,
@@ -909,36 +833,6 @@ private:
         commandManager.endSingleTimeCommand(commandBuffer);
     }
 
-    void createTextureImageView() {
-        textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
-    }
-
-    VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags) {
-        VkImageViewCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = image;
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = format;
-
-        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-        createInfo.subresourceRange.aspectMask = aspectFlags;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
-
-        VkImageView imageView;
-        if (vkCreateImageView(device, &createInfo, nullptr, &imageView) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create image view!");
-        }
-
-        return imageView;
-    }
-
     void createTextureSampler() {
         VkSamplerCreateInfo samplerInfo{};
         samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -968,7 +862,7 @@ private:
     }
 
     void loadMeshes() {
-        auto pMeshAssetBuilder = new MeshAssetBuilder(physicalDevice, device, commandManager);
+        auto pMeshAssetBuilder = new MeshAssetBuilder(device, ressourceBuilder);
         meshAssetBuilder = *pMeshAssetBuilder;
         meshAsset = meshAssetBuilder.LoadMeshAsset(MODEL_PATH);
     }
@@ -977,56 +871,14 @@ private:
         VkDeviceSize size = sizeof(UniformBufferObject);
 
         uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-        uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
         uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                         uniformBuffers[i], uniformBuffersMemory[i]);
-            vkMapMemory(device, uniformBuffersMemory[i], 0, size, 0, &uniformBuffersMapped[i]);
+            uniformBuffers[i] = ressourceBuilder.createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+            vkMapMemory(device, uniformBuffers[i].bufferMemory, 0, size, 0, &uniformBuffersMapped[i]);
         }
-    }
-
-    void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-                      VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
-        VkBufferCreateInfo bufferInfo{};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = size;
-        bufferInfo.usage = usage;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        bufferInfo.flags = 0;
-
-        if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create vertex buffer!");
-        }
-
-        VkMemoryRequirements memRequirements{};
-        vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
-
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
-
-        if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
-            throw std::runtime_error("failed to allocate vertex buffer memory!");
-        }
-
-        vkBindBufferMemory(device, buffer, bufferMemory, 0);
-    }
-
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-        VkPhysicalDeviceMemoryProperties memProperies;
-        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperies);
-
-        for (uint32_t i = 0; i < memProperies.memoryTypeCount; i++) {
-            if (typeFilter & (1 << i) && (memProperies.memoryTypes[i].propertyFlags & properties) == properties) {
-                return i;
-            }
-        }
-
-        throw std::runtime_error("failed to find suitable memory type!");
     }
 
     void createDescriptorAllocator() {
@@ -1044,9 +896,9 @@ private:
         }
 
         for (size_t i = 0; i < descriptorSets.size(); i++) {
-            descriptorAllocator.writeBuffer(0, uniformBuffers[i], sizeof(UniformBufferObject),
+            descriptorAllocator.writeBuffer(0, uniformBuffers[i].buffer, sizeof(UniformBufferObject),
                                             0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-            descriptorAllocator.writeImage(1, textureImageView, textureSampler,
+            descriptorAllocator.writeImage(1, textureImage.imageView, textureSampler,
                                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
             descriptorAllocator.updateSet(device, descriptorSets[i]);
             descriptorAllocator.clearWrites();
@@ -1232,20 +1084,15 @@ private:
     }
 
     void cleanup() {
-        vkDestroyImageView(device, depthImageView, nullptr);
-        vkDestroyImage(device, depthImage, nullptr);
-        vkFreeMemory(device, depthImageMemory, nullptr);
+        ressourceBuilder.destroyImage(depthImage);
 
         cleanupSwapChain();
 
         vkDestroySampler(device, textureSampler, nullptr);
-        vkDestroyImageView(device, textureImageView, nullptr);
-        vkDestroyImage(device, textureImage, nullptr);
-        vkFreeMemory(device, textureImageMemory, nullptr);
+        ressourceBuilder.destroyImage(textureImage);
 
         for (size_t i = 0; i < uniformBuffers.size(); i++) {
-            vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-            vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+            ressourceBuilder.destroyBuffer(uniformBuffers[i]);
         }
         descriptorAllocator.destroyPools(device);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
@@ -1282,23 +1129,6 @@ private:
             vkDestroyImageView(device, imageView, nullptr);
         }
         vkDestroySwapchainKHR(device, swapChain, nullptr);
-    }
-
-    static std::vector<char> readFile(const std::string& filename) {
-        std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-        if (!file.is_open()) {
-            throw std::runtime_error("failed to open file " + filename);
-        }
-
-        size_t fileSize = (size_t) file.tellg();
-        std::vector<char> buffer(fileSize);
-
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-
-        file.close();
-        return buffer;
     }
 
     /*void compileShaders(VkDevice* device, const std::string source_name, shaderc_shader_kind kind,
