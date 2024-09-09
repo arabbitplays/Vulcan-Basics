@@ -35,9 +35,39 @@
 #include "builders/DescriptorLayoutBuilder.hpp"
 #include "builders/RenderPassBuilder.hpp"
 #include "rendering/IRenderable.hpp"
-#include "rendering/materials/Metallic_Roughness.hpp"
 
-#endif //BASICS_VULKANENGINE_HPP
+class VulkanEngine;
+
+struct MetallicRoughness {
+
+    MaterialPipeline opaquePipeline;
+    MaterialPipeline transparentPipeline;
+
+    VkDescriptorSetLayout materialLayout;
+
+    struct MaterialConstants {
+        glm::vec4 colorFactors;
+        glm::vec4 metalRoughFactors;
+        glm::vec4 extra[14];
+    };
+
+    struct MaterialResources {
+        AllocatedImage colorImage;
+        VkSampler colorSampler;
+        AllocatedImage metalRoughImage;
+        VkSampler metalRoughSampler;
+        VkBuffer dataBuffer;
+        uint32_t bufferOffset;
+    };
+
+    DescriptorAllocator descriptorAllocator;
+
+    void buildPipelines(VulkanEngine* engine);
+    void clearRessources();
+
+    MaterialInstance writeMaterial(VkDevice device, MaterialPass pass,
+                                   const MaterialResources& resources, DescriptorAllocator allocator);
+};
 
 class VulkanEngine {
 public:
@@ -177,4 +207,6 @@ private:
         return VK_FALSE;
     }
 };
+
+#endif //BASICS_VULKANENGINE_HPP
 

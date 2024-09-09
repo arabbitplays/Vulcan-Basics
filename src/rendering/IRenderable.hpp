@@ -7,8 +7,6 @@
 #ifndef BASICS_IRENDERABLE_HPP
 #define BASICS_IRENDERABLE_HPP
 
-#endif //BASICS_IRENDERABLE_HPP
-
 enum class MaterialPass : uint8_t {
     MainColor,
     Transparent,
@@ -27,5 +25,7 @@ struct MaterialInstance {
 };
 
 class IRenderable {
-        virtual void Draw(const glm::mat4& topMatrix, DrawContext* ctx) = 0;
 };
+
+#endif //BASICS_IRENDERABLE_HPP
+

@@ -22,7 +22,6 @@ add_executable(${PROJECT_NAME} src/VulkanEngine.cpp
         src/builders/RessourceBuilder.cpp
         src/builders/RessourceBuilder.hpp
         src/rendering/IRenderable.hpp
-        src/rendering/materials/Metallic_Roughness.hpp
         src/VulkanUtil.hpp
         src/builders/DescriptorLayoutBuilder.cpp
         src/builders/DescriptorLayoutBuilder.hpp
@@ -30,6 +29,8 @@ add_executable(${PROJECT_NAME} src/VulkanEngine.cpp
         src/VulkanEngine.hpp
         src/builders/RenderPassBuilder.cpp
         src/builders/RenderPassBuilder.hpp
+        src/rendering/materials/MetallicRoughness.cpp
+        src/rendering/materials/MetallicRoughness.hpp
 )
 
 target_link_libraries(${PROJECT_NAME} glfw glm::glm Vulkan::Vulkan stb::stb tinyobjloader::tinyobjloader)
