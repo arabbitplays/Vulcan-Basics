@@ -23,8 +23,8 @@ public:
     void destroyPools(VkDevice device);
     VkDescriptorSet allocate(VkDevice device, VkDescriptorSetLayout layout, void* pNext = nullptr);
 
-    void writeBuffer(uint32_t binding, VkBuffer& buffer, uint32_t size, uint32_t offset, VkDescriptorType type);
-    void writeImage(uint32_t binding, VkImageView& imageView, VkSampler& sampler, VkImageLayout layout, VkDescriptorType type);
+    void writeBuffer(uint32_t binding, VkBuffer buffer, uint32_t size, uint32_t offset, VkDescriptorType type);
+    void writeImage(uint32_t binding, VkImageView imageView, VkSampler sampler, VkImageLayout layout, VkDescriptorType type);
     void updateSet(VkDevice& device, VkDescriptorSet& set);
     void clearWrites();
 

@@ -5,7 +5,7 @@
 #include "../../VulkanEngine.hpp"
 #include "../IRenderable.hpp"
 
-struct metallicRoughness {
+struct MetallicRoughness {
     MaterialPipeline opaquePipeline;
     MaterialPipeline transparentPipeline;
 
@@ -17,7 +17,7 @@ struct metallicRoughness {
         glm::vec4 extra[14];
     };
 
-    struct MaterialRessources {
+    struct MaterialResources {
         AllocatedImage colorImage;
         VkSampler colorSampler;
         AllocatedImage metalRoughImage;
@@ -31,10 +31,11 @@ struct metallicRoughness {
     void buildPipelines(VulkanEngine* engine);
     void clearRessources();
 
-    MaterialInstance writeMaterial() {}
+    MaterialInstance writeMaterial(VkDevice device, MaterialPass pass,
+                                   const MaterialResources& resources, DescriptorAllocator allocator);
 };
 
-void metallicRoughness::buildPipelines(VulkanEngine* engine) {
+void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
     VkShaderModule vertShader = VulkanUtil::createShaderModule(engine-> device, "shaders, vert.spv");
     VkShaderModule fragShader = VulkanUtil::createShaderModule(engine->device, "shaders/frag.spv");
 
@@ -45,7 +46,7 @@ void metallicRoughness::buildPipelines(VulkanEngine* engine) {
 
     materialLayout = layoutBuilder.build(engine->device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    VkDescriptorSetLayout layouts[] = {engine->sceneDataDescriptorLayout, materialLayout};
+    VkDescriptorSetLayout layouts[] = {engine->sceneDataDescriptorLayout, materialLayout, engine->objectDataDescriptorLayout};
 
     RenderPassBuilder renderPassBuilder;
     renderPassBuilder.setColorAttachmentFormat(engine->getColorAttachmentFormat());
@@ -73,4 +74,26 @@ void metallicRoughness::buildPipelines(VulkanEngine* engine) {
 
     vkDestroyShaderModule(engine->device, vertShader, nullptr);
     vkDestroyShaderModule(engine->device, fragShader, nullptr);
+}
+
+MaterialInstance MetallicRoughness::writeMaterial(VkDevice device, MaterialPass pass,
+                                                  const MaterialResources& resources, DescriptorAllocator allocator) {
+    MaterialInstance instance;
+    instance.materialPass = pass;
+    if (pass == MaterialPass::Transparent) {
+        instance.pipeline = &transparentPipeline;
+    } else {
+        instance.pipeline = &opaquePipeline;
+    }
+
+    instance.materialSet = allocator.allocate(device, materialLayout);
+
+    allocator.clearWrites();
+    allocator.writeBuffer(0, resources.dataBuffer, sizeof(MaterialConstants), resources.bufferOffset, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    allocator.writeImage(1, resources.colorImage.imageView, resources.colorSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ,VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    allocator.writeImage(2, resources.metalRoughImage.imageView, resources.metalRoughSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ,VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+    allocator.updateSet(device, instance.materialSet);
+
+    return instance;
 }

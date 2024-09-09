@@ -34,6 +34,8 @@
 #include "VulkanUtil.hpp"
 #include "builders/DescriptorLayoutBuilder.hpp"
 #include "builders/RenderPassBuilder.hpp"
+#include "rendering/IRenderable.hpp"
+#include "rendering/materials/Metallic_Roughness.hpp"
 
 #endif //BASICS_VULKANENGINE_HPP
 
@@ -43,11 +45,26 @@ public:
     CommandManager commandManager;
     RessourceBuilder ressourceBuilder;
     MeshAssetBuilder meshAssetBuilder;
+
     VkDescriptorSetLayout sceneDataDescriptorLayout;
+    VkDescriptorSetLayout objectDataDescriptorLayout;
 
     void run();
     VkFormat getColorAttachmentFormat();
     VkFormat getDepthFormat();
+
+    struct SceneData {
+        glm::mat4 view;
+        glm::mat4 proj;
+        glm::mat4 viewProj;
+        glm::vec4 ambientColor;
+        glm::vec4 sunlightDirection; // w for sun power
+        glm::vec4 sunlightPower;
+    };
+
+    struct ObjectData {
+        glm::mat4 model;
+    };
 
 private:
     GLFWwindow* window;
@@ -91,6 +108,9 @@ private:
 
     uint32_t currentFrame = 0;
     bool framebufferResized = false;
+
+    MaterialInstance defaultData;
+    MetallicRoughness metalRoughMaterial;
 
     void initWindow();
     void initVulkan();

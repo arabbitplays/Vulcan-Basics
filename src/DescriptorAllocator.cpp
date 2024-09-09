@@ -112,7 +112,7 @@ VkDescriptorSet DescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLa
     return descriptorSet;
 }
 
-void DescriptorAllocator::writeBuffer(uint32_t binding, VkBuffer& buffer, uint32_t size, uint32_t offset, VkDescriptorType type) {
+void DescriptorAllocator::writeBuffer(uint32_t binding, VkBuffer buffer, uint32_t size, uint32_t offset, VkDescriptorType type) {
     VkDescriptorBufferInfo& bufferInfo = bufferInfos.emplace_back(VkDescriptorBufferInfo{
             .buffer = buffer,
             .offset = offset,
@@ -130,8 +130,8 @@ void DescriptorAllocator::writeBuffer(uint32_t binding, VkBuffer& buffer, uint32
     writes.push_back(write);
 }
 
-void DescriptorAllocator::writeImage(uint32_t binding, VkImageView& imageView,
-                                     VkSampler& sampler, VkImageLayout layout, VkDescriptorType type) {
+void DescriptorAllocator::writeImage(uint32_t binding, VkImageView imageView,
+                                     VkSampler sampler, VkImageLayout layout, VkDescriptorType type) {
     VkDescriptorImageInfo& imageInfo = imageInfos.emplace_back(VkDescriptorImageInfo{
             .sampler = sampler,
             .imageView = imageView,
