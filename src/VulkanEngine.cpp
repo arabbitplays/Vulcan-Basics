@@ -38,14 +38,8 @@ const uint32_t HEIGHT = 600;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-const std::string MODEL_PATH = "models/viking_room.obj";
+const std::string MODEL_PATH = "models/sphere.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
-
-struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
-};
 
 void VulkanEngine::run() {
     initWindow();
@@ -53,7 +47,6 @@ void VulkanEngine::run() {
     mainLoop();
     cleanup();
 }
-
 
 void VulkanEngine::initWindow() {
     glfwInit();
@@ -82,16 +75,14 @@ void VulkanEngine::initVulkan() {
 
     createSwapChain();
     createImageViews();
-    createDescriptorSetLayout();
-    createGraphicsPipeline();
+    initPipelines();
+    createDescriptorAllocator();
 
     createDepthResources();
-    createTextureImage();
-    createTextureSampler();
+    initDefaultData();
 
     loadMeshes();
     createUniformBuffers();
-    createDescriptorAllocator();
     createDescriptorSets();
 
     createFrameBuffers();
@@ -482,39 +473,8 @@ void VulkanEngine::createImageViews() {
     }
 }
 
-void VulkanEngine::createDescriptorSetLayout() {
-    DescriptorLayoutBuilder layoutBuilder;
-    layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    descriptorSetLayout = layoutBuilder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-
-}
-
-void VulkanEngine::createGraphicsPipeline() {
-    VkShaderModule vertShaderModule = VulkanUtil::createShaderModule(device, "shaders/vert.spv");
-    VkShaderModule fragShaderModule = VulkanUtil::createShaderModule(device, "shaders/frag.spv");
-
-    PipelineBuilder pipelineBuilder{};
-    pipelineBuilder.setShaders(vertShaderModule, fragShaderModule);
-    pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-    pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-    pipelineBuilder.setMultisamplingNone();
-    pipelineBuilder.enableDepthTest(VK_TRUE, VK_COMPARE_OP_LESS);
-    pipelineBuilder.disableColorBlending();
-    std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { descriptorSetLayout };
-    pipelineBuilder.setDescriptorSetLayouts(&descriptorSetLayout);
-
-    RenderPassBuilder renderPassBuilder;
-    renderPassBuilder.setColorAttachmentFormat(getColorAttachmentFormat());
-    renderPassBuilder.setDepthFormat(getDepthFormat());
-    renderPass = renderPassBuilder.createRenderPass(device);
-
-    pipelineBuilder.buildPipelineLayout(device, &pipelineLayout);
-    pipelineBuilder.buildPipeline(device, renderPass, &graphicsPipeline, pipelineLayout);
-
-    vkDestroyShaderModule(device, vertShaderModule, nullptr);
-    vkDestroyShaderModule(device, fragShaderModule, nullptr);
+void VulkanEngine::initPipelines() {
+    metalRoughMaterial.buildPipelines(this);
 }
 
 void VulkanEngine::createFrameBuffers() {
@@ -527,7 +487,7 @@ void VulkanEngine::createFrameBuffers() {
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.renderPass = metalRoughMaterial.opaquePipeline.renderPass;
         framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
         framebufferInfo.pAttachments = attachments.data();
         framebufferInfo.width = swapChainExtent.width;
@@ -553,9 +513,13 @@ void VulkanEngine::createRessourceBuilder() {
 void VulkanEngine::createDepthResources() {
     VkFormat depthFormat = findDepthFormat();
 
-    depthImage = ressourceBuilder.createImage(swapChainExtent.width, swapChainExtent.height, depthFormat,
+    VkExtent3D extent;
+    extent.width = swapChainExtent.width;
+    extent.height = swapChainExtent.height;
+    extent.depth = 1;
+    depthImage = ressourceBuilder.createImage(extent, depthFormat,
                                               VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+                                              VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 VkFormat VulkanEngine::findDepthFormat() {
@@ -577,140 +541,106 @@ VkFormat VulkanEngine::findSupportedFormat(const std::vector<VkFormat> candidate
         }
     }
 
-    throw std::runtime_error("no supported format found!");
+    throw std::runtime_error("no supported imageFormat found!");
 }
 
 bool VulkanEngine::hasStencilComponent(VkFormat format) {
     return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-void VulkanEngine::createTextureImage() {
+void VulkanEngine::initDefaultData() {
+    initDefaultTextures();
+    initDefaultSamplers();
+    initDefaultMaterials();
+}
+
+void VulkanEngine::loadTexture() {
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels) {
         throw std::runtime_error("failed to load texture image!");
     }
 
-    AllocatedBuffer stagingBuffer = ressourceBuilder.createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    void* data;
-    vkMapMemory(device, stagingBuffer.bufferMemory, 0, imageSize, 0, &data);
-    memcpy(data, pixels, static_cast<size_t>(imageSize));
-    vkUnmapMemory(device, stagingBuffer.bufferMemory);
-
     stbi_image_free(pixels);
 
-    textureImage = ressourceBuilder.createImage(static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight),
-                                                VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
-                VK_BUFFER_USAGE_2_TRANSFER_DST_BIT_KHR | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    VkExtent3D extent;
+    extent.width = static_cast<uint32_t>(texWidth);
+    extent.height = static_cast<uint32_t>(texHeight);
+    extent.depth = 1;
 
-    transitionImageLayout(textureImage.image, VK_FORMAT_R8G8B8_SRGB,
-                          VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    copyBufferToImage(stagingBuffer.buffer, textureImage.image,
-                      static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-    transitionImageLayout(textureImage.image, VK_FORMAT_R8G8B8_SRGB,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    ressourceBuilder.destroyBuffer(stagingBuffer);
+    textureImage = ressourceBuilder.createImage(pixels, extent, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+                                                VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-void VulkanEngine::transitionImageLayout(VkImage image, VkFormat format,
-                           VkImageLayout oldLayout, VkImageLayout newLayout) {
-    VkCommandBuffer commandBuffer = commandManager.beginSingleTimeCommands();
+void VulkanEngine::initDefaultTextures() {
+    uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
+    whiteImage = ressourceBuilder.createImage((void*)&white, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                              VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = oldLayout;
-    barrier.newLayout = newLayout;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
+    uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f, 1));
+    greyImage = ressourceBuilder.createImage((void*)&grey, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                              VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
-    VkPipelineStageFlags sourceStage;
-    VkPipelineStageFlags destinationStage;
+    uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 1));
+    blackImage = ressourceBuilder.createImage((void*)&black, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                              VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
-    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-        sourceStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else {
-        throw std::invalid_argument("unsupported layout transition!");
+    uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
+    std::array<uint32_t, 16 * 16> pixels;
+    for (int x = 0; x < 16; x++) {
+        for (int y = 0; y < 16; y++) {
+            pixels[16 * y + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
+        }
     }
-
-    vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0,
-                         0, nullptr,
-                         0, nullptr,
-                         1, &barrier);
-
-    commandManager.endSingleTimeCommand(commandBuffer);
+    errorCheckerBoardImage = ressourceBuilder.createImage((void*)&white, VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                              VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-void VulkanEngine::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
-    VkCommandBuffer commandBuffer = commandManager.beginSingleTimeCommands();
-
-    VkBufferImageCopy region{};
-    region.bufferOffset = 0;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-
-    region.imageOffset = {0, 0, 0};
-    region.imageExtent = { width, height, 1};
-
-    vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-    commandManager.endSingleTimeCommand(commandBuffer);
-}
-
-void VulkanEngine::createTextureSampler() {
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+void VulkanEngine::initDefaultSamplers() {
+    VkSamplerCreateInfo samplerInfo{ .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
     samplerInfo.magFilter = VK_FILTER_LINEAR;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
-    VkPhysicalDeviceProperties properties{};
-    vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-
-    samplerInfo.anisotropyEnable = VK_TRUE;
-    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    samplerInfo.mipLodBias = 0.0f;
-    samplerInfo.minLod = 0.0f;
-    samplerInfo.maxLod = 0.0f;
-
-    if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+    if (vkCreateSampler(device, &samplerInfo, nullptr, &defaultSamplerLinear) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture sampler!");
     }
+
+    samplerInfo.magFilter = VK_FILTER_NEAREST;
+    samplerInfo.minFilter = VK_FILTER_NEAREST;
+
+    if (vkCreateSampler(device, &samplerInfo, nullptr, &defaultSamplerNearest) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create texture sampler!");
+    }
+}
+
+void VulkanEngine::initDefaultMaterials() {
+    MetallicRoughness::MaterialResources resources;
+    resources.colorImage = whiteImage;
+    resources.colorSampler = defaultSamplerLinear;
+    resources.metalRoughImage = whiteImage;
+    resources.metalRoughSampler = defaultSamplerLinear;
+
+    VkDeviceSize size = sizeof(MetallicRoughness::MaterialConstants);
+
+    AllocatedBuffer materialDataBuffer = ressourceBuilder.createBuffer(
+            size,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    MetallicRoughness::MaterialConstants constants;
+    constants.colorFactors = glm::vec4{1,1,1,1};
+    constants.metalRoughFactors = glm::vec4{1, 0.5, 0, 0};
+
+    void* data;
+    vkMapMemory(device, materialDataBuffer.bufferMemory, 0, size, 0, &data);
+    memcpy(data, &constants, static_cast<size_t>(size));
+    vkUnmapMemory(device, materialDataBuffer.bufferMemory);
+
+    resources.dataBuffer = materialDataBuffer.buffer;
+    resources.bufferOffset = 0;
+
+    defaultMetalRough = metalRoughMaterial.writeMaterial(device, MaterialPass::MainColor, resources, descriptorAllocator);
 }
 
 void VulkanEngine::loadMeshes() {
@@ -720,16 +650,20 @@ void VulkanEngine::loadMeshes() {
 }
 
 void VulkanEngine::createUniformBuffers() {
-    VkDeviceSize size = sizeof(UniformBufferObject);
+    VkDeviceSize size = sizeof(SceneData);
 
-    uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
-
+    sceneUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    sceneUniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+    modelUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    modelUniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        uniformBuffers[i] = ressourceBuilder.createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        sceneUniformBuffers[i] = ressourceBuilder.createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        vkMapMemory(device, sceneUniformBuffers[i].bufferMemory, 0, size, 0, &sceneUniformBuffersMapped[i]);
 
-        vkMapMemory(device, uniformBuffers[i].bufferMemory, 0, size, 0, &uniformBuffersMapped[i]);
+        modelUniformBuffers[i] = ressourceBuilder.createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        vkMapMemory(device, modelUniformBuffers[i].bufferMemory, 0, size, 0, &modelUniformBuffersMapped[i]);
     }
 }
 
@@ -742,18 +676,24 @@ void VulkanEngine::createDescriptorAllocator() {
 }
 
 void VulkanEngine::createDescriptorSets() {
-    descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    sceneDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    modelDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        descriptorSets[i] = descriptorAllocator.allocate(device, descriptorSetLayout, nullptr);
+        sceneDescriptorSets[i] = descriptorAllocator.allocate(device, sceneDataDescriptorLayout, nullptr);
+        modelDescriptorSets[i] = descriptorAllocator.allocate(device, objectDataDescriptorLayout, nullptr);
     }
 
-    for (size_t i = 0; i < descriptorSets.size(); i++) {
-        descriptorAllocator.writeBuffer(0, uniformBuffers[i].buffer, sizeof(UniformBufferObject),
-                                        0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        descriptorAllocator.writeImage(1, textureImage.imageView, textureSampler,
-                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        descriptorAllocator.updateSet(device, descriptorSets[i]);
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         descriptorAllocator.clearWrites();
+        descriptorAllocator.writeBuffer(0, sceneUniformBuffers[i].buffer, sizeof(SceneData),
+                                        0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        descriptorAllocator.updateSet(device, sceneDescriptorSets[i]);
+
+        descriptorAllocator.clearWrites();
+        descriptorAllocator.writeBuffer(0, modelUniformBuffers[i].buffer, sizeof(ObjectData),
+                                        0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        descriptorAllocator.updateSet(device, modelDescriptorSets[i]);
     }
 }
 
@@ -867,17 +807,21 @@ void VulkanEngine::updateUniformBuffers(uint32_t currentImage) {
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    UniformBufferObject ubo{};
-    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
+    ObjectData objectData{};
+    objectData.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    SceneData sceneData{};
+    sceneData.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
                            glm::vec3(0.0f, 0.0f, 0.0f),
                            glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj = glm::perspective(glm::radians(45.0f),
+    sceneData.proj = glm::perspective(glm::radians(45.0f),
                                 swapChainExtent.width / (float) swapChainExtent.height,
                                 0.1f, 10.0f);
-    ubo.proj[1][1] *= -1; // flip y-axis because glm is for openGL
+    sceneData.proj[1][1] *= -1; // flip y-axis because glm is for openGL
+    sceneData.viewProj = sceneData.view * sceneData.proj;
 
-    memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+    memcpy(modelUniformBuffersMapped[currentImage], &objectData, sizeof(objectData));
+    memcpy(sceneUniformBuffersMapped[currentImage], &sceneData, sizeof(sceneData));
 }
 
 void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
@@ -888,9 +832,11 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
         throw std::runtime_error("failed to begin record command buffer!");
     }
 
+    MaterialPipeline pipeline = metalRoughMaterial.opaquePipeline;
+
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = renderPass;
+    renderPassInfo.renderPass = pipeline.renderPass;
     renderPassInfo.framebuffer = swapChainFrameBuffers[imageIndex];
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = swapChainExtent;
@@ -901,17 +847,17 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
     VkBuffer vertexBuffers[] = {meshAsset.meshBuffers.vertexBuffer.buffer};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-
     vkCmdBindIndexBuffer(commandBuffer, meshAsset.meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
+    std::vector<VkDescriptorSet> descriptorSets = {sceneDescriptorSets[currentFrame], defaultMetalRough.materialSet, modelDescriptorSets[currentFrame]};
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipelineLayout, 0, 1,
-                            &descriptorSets[currentFrame], 0, nullptr);
+                            pipeline.pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()),
+                            descriptorSets.data(), 0, nullptr);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -940,14 +886,22 @@ void VulkanEngine::cleanup() {
 
     cleanupSwapChain();
 
-    vkDestroySampler(device, textureSampler, nullptr);
-    ressourceBuilder.destroyImage(textureImage);
+    vkDestroySampler(device, defaultSamplerLinear, nullptr);
+    vkDestroySampler(device, defaultSamplerNearest, nullptr);
+    ressourceBuilder.destroyImage(whiteImage);
+    ressourceBuilder.destroyImage(greyImage);
+    ressourceBuilder.destroyImage(blackImage);
+    ressourceBuilder.destroyImage(errorCheckerBoardImage);
 
-    for (size_t i = 0; i < uniformBuffers.size(); i++) {
-        ressourceBuilder.destroyBuffer(uniformBuffers[i]);
+    metalRoughMaterial.clearRessources(device);
+
+    for (size_t i = 0; i < sceneUniformBuffers.size(); i++) {
+        ressourceBuilder.destroyBuffer(sceneUniformBuffers[i]);
+        ressourceBuilder.destroyBuffer(modelUniformBuffers[i]);
     }
     descriptorAllocator.destroyPools(device);
-    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, sceneDataDescriptorLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, objectDataDescriptorLayout, nullptr);
 
     meshAssetBuilder.destroyMeshAsset(meshAsset);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -957,10 +911,6 @@ void VulkanEngine::cleanup() {
     }
 
     commandManager.destroyCommandManager();
-
-    vkDestroyPipeline(device, graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-    vkDestroyRenderPass(device, renderPass, nullptr);
 
     vkDestroyDevice(device, nullptr);
 
@@ -1041,12 +991,13 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
 
     materialLayout = layoutBuilder.build(engine->device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    VkDescriptorSetLayout layouts[] = {engine->sceneDataDescriptorLayout, materialLayout, engine->objectDataDescriptorLayout};
+    std::vector<VkDescriptorSetLayout> layouts = {engine->sceneDataDescriptorLayout, materialLayout, engine->objectDataDescriptorLayout};
 
     RenderPassBuilder renderPassBuilder;
     renderPassBuilder.setColorAttachmentFormat(engine->getColorAttachmentFormat());
     renderPassBuilder.setDepthFormat(engine->getDepthFormat());
-    VkRenderPass renderPass = renderPassBuilder.createRenderPass(engine->device);
+    opaquePipeline.renderPass = renderPassBuilder.createRenderPass(engine->device);
+    transparentPipeline.renderPass = renderPassBuilder.createRenderPass(engine->device);
 
     PipelineBuilder pipelineBuilder;
     pipelineBuilder.setDescriptorSetLayouts(layouts);
@@ -1059,13 +1010,13 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
     pipelineBuilder.enableDepthTest(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
     pipelineBuilder.buildPipelineLayout(engine->device, &opaquePipeline.pipelineLayout);
-    pipelineBuilder.buildPipeline(engine->device, renderPass, &opaquePipeline.pipeline, opaquePipeline.pipelineLayout);
+    pipelineBuilder.buildPipeline(engine->device, opaquePipeline.renderPass, &opaquePipeline.pipeline, opaquePipeline.pipelineLayout);
 
     pipelineBuilder.enableAdditiveBlending();
     pipelineBuilder.enableDepthTest(VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
     pipelineBuilder.buildPipelineLayout(engine->device, &transparentPipeline.pipelineLayout);
-    pipelineBuilder.buildPipeline(engine->device, renderPass, &transparentPipeline.pipeline, transparentPipeline.pipelineLayout);
+    pipelineBuilder.buildPipeline(engine->device, transparentPipeline.renderPass, &transparentPipeline.pipeline, transparentPipeline.pipelineLayout);
 
     vkDestroyShaderModule(engine->device, vertShader, nullptr);
     vkDestroyShaderModule(engine->device, fragShader, nullptr);
@@ -1091,4 +1042,14 @@ MaterialInstance MetallicRoughness::writeMaterial(VkDevice device, MaterialPass 
     allocator.updateSet(device, instance.materialSet);
 
     return instance;
+}
+
+void MetallicRoughness::clearRessources(VkDevice device) {
+    vkDestroyDescriptorSetLayout(device, materialLayout, nullptr);
+    vkDestroyPipeline(device, opaquePipeline.pipeline, nullptr);
+    vkDestroyPipeline(device, transparentPipeline.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, opaquePipeline.pipelineLayout, nullptr);
+    vkDestroyPipelineLayout(device, transparentPipeline.pipelineLayout, nullptr);
+    vkDestroyRenderPass(device, opaquePipeline.renderPass, nullptr);
+    vkDestroyRenderPass(device, transparentPipeline.renderPass, nullptr);
 }

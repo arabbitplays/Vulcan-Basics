@@ -18,28 +18,34 @@ struct AllocatedImage {
     VkImage image;
     VkDeviceMemory imageMemory;
     VkImageView imageView;
+    VkFormat imageFormat;
+    VkExtent3D imageExtent;
 };
 
 class RessourceBuilder {
 public:
     RessourceBuilder() = default;
     RessourceBuilder(VkPhysicalDevice physicalDevice, VkDevice device, CommandManager commandManager);
+
     AllocatedBuffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
     void copyBuffer(AllocatedBuffer src, AllocatedBuffer dst, VkDeviceSize size);
     void destroyBuffer(AllocatedBuffer buffer);
 
-    AllocatedImage createImage(uint32_t width, uint32_t height,
-                                    VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-                                    VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags);
+    AllocatedImage createImage(VkExtent3D extent, VkFormat format, VkImageTiling tiling,
+                               VkImageUsageFlags usage, VkImageAspectFlags aspectFlags);
+    AllocatedImage createImage(void* data, VkExtent3D extent, VkFormat format, VkImageTiling tiling,
+                               VkImageUsageFlags usage, VkImageAspectFlags aspectFlags);
     VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
     void destroyImage(AllocatedImage image);
 
 private:
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
-        VkPhysicalDevice physicalDevice;
+    VkPhysicalDevice physicalDevice;
     VkDevice device;
     CommandManager commandManager;
+
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    void copyBufferToImage(VkBuffer buffer, VkImage image, VkExtent3D extent);
+    void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 };
 
 

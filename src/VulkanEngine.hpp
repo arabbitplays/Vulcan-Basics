@@ -63,7 +63,7 @@ struct MetallicRoughness {
     DescriptorAllocator descriptorAllocator;
 
     void buildPipelines(VulkanEngine* engine);
-    void clearRessources();
+    void clearRessources(VkDevice device);
 
     MaterialInstance writeMaterial(VkDevice device, MaterialPass pass,
                                    const MaterialResources& resources, DescriptorAllocator allocator);
@@ -113,11 +113,6 @@ private:
 
     AllocatedImage depthImage;
 
-    VkRenderPass renderPass;
-    VkDescriptorSetLayout descriptorSetLayout;
-    VkPipelineLayout pipelineLayout;
-    VkPipeline graphicsPipeline;
-
     std::vector<VkFramebuffer> swapChainFrameBuffers;
     std::vector<VkCommandBuffer> commandBuffers;
 
@@ -126,11 +121,22 @@ private:
     AllocatedImage textureImage;
     VkSampler textureSampler;
 
-    std::vector<AllocatedBuffer> uniformBuffers;
-    std::vector<void*> uniformBuffersMapped;
+    AllocatedImage whiteImage;
+    AllocatedImage greyImage;
+    AllocatedImage blackImage;
+    AllocatedImage errorCheckerBoardImage;
+
+    VkSampler defaultSamplerLinear;
+    VkSampler defaultSamplerNearest;
+
+    std::vector<AllocatedBuffer> sceneUniformBuffers;
+    std::vector<void*> sceneUniformBuffersMapped;
+    std::vector<AllocatedBuffer> modelUniformBuffers;
+    std::vector<void*> modelUniformBuffersMapped;
 
     DescriptorAllocator descriptorAllocator;
-    std::vector<VkDescriptorSet> descriptorSets;
+    std::vector<VkDescriptorSet> sceneDescriptorSets;
+    std::vector<VkDescriptorSet> modelDescriptorSets;
 
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
@@ -139,7 +145,7 @@ private:
     uint32_t currentFrame = 0;
     bool framebufferResized = false;
 
-    MaterialInstance defaultData;
+    MaterialInstance defaultMetalRough;
     MetallicRoughness metalRoughMaterial;
 
     void initWindow();
@@ -172,7 +178,7 @@ private:
     VkExtent2D chooseSwapExtend(const VkSurfaceCapabilitiesKHR &capabilities);
     void createImageViews();
     void createDescriptorSetLayout();
-    void createGraphicsPipeline();
+    void initPipelines();
     void createFrameBuffers();
     void createCommandManager();
     void createRessourceBuilder();
@@ -181,9 +187,10 @@ private:
     VkFormat findSupportedFormat(const std::vector<VkFormat> candidates, VkImageTiling tiling,
                                  VkFormatFeatureFlags features);
     bool hasStencilComponent(VkFormat format);
-    void createTextureImage();
-    void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-    void createTextureSampler();
+    void initDefaultData();
+    void initDefaultTextures();
+    void initDefaultSamplers();
+    void initDefaultMaterials();
     void loadMeshes();
     void createUniformBuffers();
     void createDescriptorAllocator();
@@ -194,7 +201,6 @@ private:
     void cleanupSwapChain();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void updateUniformBuffers(uint32_t currentImage);
-    void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
             VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -206,6 +212,8 @@ private:
 
         return VK_FALSE;
     }
+
+    void loadTexture();
 };
 
 #endif //BASICS_VULKANENGINE_HPP
