@@ -63,7 +63,7 @@ struct MetallicRoughness {
     DescriptorAllocator descriptorAllocator;
 
     void buildPipelines(VulkanEngine* engine);
-    void clearRessources();
+    void clearRessources(VkDevice device);
 
     MaterialInstance writeMaterial(VkDevice device, MaterialPass pass,
                                    const MaterialResources& resources, DescriptorAllocator allocator);
@@ -123,7 +123,13 @@ private:
     MeshAssetBuilder::MeshAsset meshAsset;
 
     AllocatedImage textureImage;
-    VkSampler textureSampler;
+    AllocatedImage whiteImage;
+    AllocatedImage greyImage;
+    AllocatedImage blackImage;
+    AllocatedImage errorCheckerboardImage;
+
+    VkSampler defaultSamplerLinear;
+    VkSampler defaultSamplerNearest;
 
     std::vector<AllocatedBuffer> sceneUniformBuffers;
     std::vector<void*> sceneUniformBuffersMapped;
@@ -141,8 +147,9 @@ private:
     uint32_t currentFrame = 0;
     bool framebufferResized = false;
 
-    MaterialInstance defaultData;
+    MaterialInstance defaultMetalRough;
     MetallicRoughness metalRoughMaterial;
+    AllocatedBuffer materialBuffer; // TODO weg damit da nur da zum destroyen am End
 
     void initWindow();
     void initVulkan();
@@ -174,7 +181,7 @@ private:
     VkExtent2D chooseSwapExtend(const VkSurfaceCapabilitiesKHR &capabilities);
     void createImageViews();
     void createDescriptorSetLayout();
-    void createGraphicsPipeline();
+    void initPipelines();
     void createFrameBuffers();
     void createCommandManager();
     void createRessourceBuilder();
@@ -184,8 +191,10 @@ private:
                                  VkFormatFeatureFlags features);
     bool hasStencilComponent(VkFormat format);
     void createTextureImage();
-    void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-    void createTextureSampler();
+    void initDefaultResources();
+    void createDefaultTextures();
+    void createDefaultSamplers();
+    void createDefaultMaterials();
     void loadMeshes();
     void createUniformBuffers();
     void createDescriptorAllocator();
