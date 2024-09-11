@@ -75,8 +75,9 @@ void VulkanEngine::initVulkan() {
 
     createSwapChain();
     createImageViews();
-    initPipelines();
     createDescriptorAllocator();
+    createDescriptorSetLayouts();
+    initPipelines();
 
     createDepthResources();
     initDefaultData();
@@ -639,6 +640,7 @@ void VulkanEngine::initDefaultMaterials() {
 
     resources.dataBuffer = materialDataBuffer.buffer;
     resources.bufferOffset = 0;
+    matBuffer = materialDataBuffer;
 
     defaultMetalRough = metalRoughMaterial.writeMaterial(device, MaterialPass::MainColor, resources, descriptorAllocator);
 }
@@ -672,7 +674,16 @@ void VulkanEngine::createDescriptorAllocator() {
             { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
             { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 },
     };
-    descriptorAllocator.init(device, MAX_FRAMES_IN_FLIGHT, poolRatios);
+    descriptorAllocator.init(device, MAX_FRAMES_IN_FLIGHT * 3, poolRatios);
+}
+
+void VulkanEngine::createDescriptorSetLayouts() {
+    DescriptorLayoutBuilder layoutBuilder;
+    layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    sceneDataDescriptorLayout = layoutBuilder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    layoutBuilder.clearBindings();
+    layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    objectDataDescriptorLayout = layoutBuilder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 }
 
 void VulkanEngine::createDescriptorSets() {
@@ -883,6 +894,7 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
 
 void VulkanEngine::cleanup() {
     ressourceBuilder.destroyImage(depthImage);
+    ressourceBuilder.destroyBuffer(matBuffer);
 
     cleanupSwapChain();
 

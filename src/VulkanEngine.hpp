@@ -147,6 +147,7 @@ private:
 
     MaterialInstance defaultMetalRough;
     MetallicRoughness metalRoughMaterial;
+    AllocatedBuffer matBuffer; // TODO remove this (just here that it can be destroyed)
 
     void initWindow();
     void initVulkan();
@@ -176,8 +177,8 @@ private:
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
     VkExtent2D chooseSwapExtend(const VkSurfaceCapabilitiesKHR &capabilities);
+    void createDescriptorSetLayouts();
     void createImageViews();
-    void createDescriptorSetLayout();
     void initPipelines();
     void createFrameBuffers();
     void createCommandManager();

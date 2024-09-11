@@ -39,7 +39,7 @@ void MeshAssetBuilder::loadModel(std::string path, std::vector<Vertex>& vertices
     std::cout << "Load model " << path << std::endl;
 
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str())) {
-        throw std::runtime_error("warn + err");
+        throw std::runtime_error(warn + " " + err);
     }
 
     std::unordered_map<Vertex, uint32_t> uniqueVertices{};

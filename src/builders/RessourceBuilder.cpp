@@ -143,6 +143,7 @@ AllocatedImage RessourceBuilder::createImage(void* data, VkExtent3D extent, VkFo
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     destroyBuffer(stagingBuffer);
+    return image;
 }
 
 void RessourceBuilder::transitionImageLayout(VkImage image, VkFormat format,
