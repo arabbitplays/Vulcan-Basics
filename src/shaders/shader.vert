@@ -17,7 +17,12 @@ layout(set = 0, binding = 0) uniform SceneData {
     vec4 sunlightPower;
 } sceneData;
 
-layout(set = 1, binding = 0) uniform ObjectData {
+layout(set = 1, binding = 0) uniform MaterialData {
+    vec4 colorFactors;
+    vec4 metalRoughFactors;
+} materialData;
+
+layout(set = 2, binding = 0) uniform ObjectData {
     mat4 model;
 } objectData;
 

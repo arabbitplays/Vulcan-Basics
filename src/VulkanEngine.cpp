@@ -509,16 +509,16 @@ void VulkanEngine::initPipelines() {
     pipelineBuilder.setMultisamplingNone();
     pipelineBuilder.enableDepthTest(VK_TRUE, VK_COMPARE_OP_LESS);
     pipelineBuilder.disableColorBlending();
-    std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { sceneDataDescriptorLayout, objectDataDescriptorLayout };
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { sceneDataDescriptorLayout, metalRoughMaterial.materialLayout, objectDataDescriptorLayout };
     pipelineBuilder.setDescriptorSetLayouts(descriptorSetLayouts);
 
     RenderPassBuilder renderPassBuilder;
     renderPassBuilder.setColorAttachmentFormat(getColorAttachmentFormat());
     renderPassBuilder.setDepthFormat(getDepthFormat());
-    renderPass = renderPassBuilder.createRenderPass(device);
+    graphicsPipeline.renderPass = renderPassBuilder.createRenderPass(device);
 
-    pipelineBuilder.buildPipelineLayout(device, &pipelineLayout);
-    pipelineBuilder.buildPipeline(device, renderPass, &graphicsPipeline, pipelineLayout);
+    pipelineBuilder.buildPipelineLayout(device, &graphicsPipeline.pipelineLayout);
+    pipelineBuilder.buildPipeline(device, graphicsPipeline.renderPass, &graphicsPipeline.pipeline, graphicsPipeline.pipelineLayout);
 
     vkDestroyShaderModule(device, vertShaderModule, nullptr);
     vkDestroyShaderModule(device, fragShaderModule, nullptr);
@@ -534,7 +534,7 @@ void VulkanEngine::createFrameBuffers() {
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.renderPass = graphicsPipeline.renderPass;
         framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
         framebufferInfo.pAttachments = attachments.data();
         framebufferInfo.width = swapChainExtent.width;
@@ -875,9 +875,11 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
         throw std::runtime_error("failed to begin record command buffer!");
     }
 
+    MaterialPipeline pipeline = graphicsPipeline;
+
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = renderPass;
+    renderPassInfo.renderPass = pipeline.renderPass;
     renderPassInfo.framebuffer = swapChainFrameBuffers[imageIndex];
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = swapChainExtent;
@@ -888,7 +890,7 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
     VkBuffer vertexBuffers[] = {meshAsset.meshBuffers.vertexBuffer.buffer};
     VkDeviceSize offsets[] = {0};
@@ -896,13 +898,10 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
 
     vkCmdBindIndexBuffer(commandBuffer, meshAsset.meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-    std::vector<VkDescriptorSet> descriptorSets = {sceneDescriptorSets[currentFrame], objectDescriptorSets[currentFrame]};
+    std::vector<VkDescriptorSet> descriptorSets = {sceneDescriptorSets[currentFrame], defaultMetalRough.materialSet, objectDescriptorSets[currentFrame]};
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipelineLayout, 0, 1,
-                            &sceneDescriptorSets[currentFrame], 0, nullptr);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipelineLayout, 1, 1,
-                            &objectDescriptorSets[currentFrame], 0, nullptr);
+                            pipeline.pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()),
+                            descriptorSets.data(), 0, nullptr);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -959,9 +958,9 @@ void VulkanEngine::cleanup() {
 
     commandManager.destroyCommandManager();
 
-    vkDestroyPipeline(device, graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-    vkDestroyRenderPass(device, renderPass, nullptr);
+    vkDestroyPipeline(device, graphicsPipeline.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, graphicsPipeline.pipelineLayout, nullptr);
+    vkDestroyRenderPass(device, graphicsPipeline.renderPass, nullptr);
 
     metalRoughMaterial.clearRessources(device);
 
@@ -1049,7 +1048,8 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
     RenderPassBuilder renderPassBuilder;
     renderPassBuilder.setColorAttachmentFormat(engine->getColorAttachmentFormat());
     renderPassBuilder.setDepthFormat(engine->getDepthFormat());
-    VkRenderPass renderPass = renderPassBuilder.createRenderPass(engine->device);
+    opaquePipeline.renderPass = renderPassBuilder.createRenderPass(engine->device);
+    transparentPipeline.renderPass = renderPassBuilder.createRenderPass(engine->device);
 
     PipelineBuilder pipelineBuilder;
     pipelineBuilder.setDescriptorSetLayouts(layouts);
@@ -1062,13 +1062,13 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
     pipelineBuilder.enableDepthTest(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
     pipelineBuilder.buildPipelineLayout(engine->device, &opaquePipeline.pipelineLayout);
-    pipelineBuilder.buildPipeline(engine->device, renderPass, &opaquePipeline.pipeline, opaquePipeline.pipelineLayout);
+    pipelineBuilder.buildPipeline(engine->device, opaquePipeline.renderPass, &opaquePipeline.pipeline, opaquePipeline.pipelineLayout);
 
     pipelineBuilder.enableAdditiveBlending();
     pipelineBuilder.enableDepthTest(VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
     pipelineBuilder.buildPipelineLayout(engine->device, &transparentPipeline.pipelineLayout);
-    pipelineBuilder.buildPipeline(engine->device, renderPass, &transparentPipeline.pipeline, transparentPipeline.pipelineLayout);
+    pipelineBuilder.buildPipeline(engine->device, transparentPipeline.renderPass, &transparentPipeline.pipeline, transparentPipeline.pipelineLayout);
 
     vkDestroyShaderModule(engine->device, vertShader, nullptr);
     vkDestroyShaderModule(engine->device, fragShader, nullptr);
@@ -1102,6 +1102,6 @@ void MetallicRoughness::clearRessources(VkDevice device) {
     vkDestroyPipeline(device, transparentPipeline.pipeline, nullptr);
     vkDestroyPipelineLayout(device, opaquePipeline.pipelineLayout, nullptr);
     vkDestroyPipelineLayout(device, transparentPipeline.pipelineLayout, nullptr);
-    //vkDestroyRenderPass(device, opaquePipeline.renderPass, nullptr);
-    //vkDestroyRenderPass(device, transparentPipeline.renderPass, nullptr);
+    vkDestroyRenderPass(device, opaquePipeline.renderPass, nullptr);
+    vkDestroyRenderPass(device, transparentPipeline.renderPass, nullptr);
 }

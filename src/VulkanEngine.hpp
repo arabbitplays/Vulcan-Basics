@@ -113,9 +113,7 @@ private:
 
     AllocatedImage depthImage;
 
-    VkRenderPass renderPass;
-    VkPipelineLayout pipelineLayout;
-    VkPipeline graphicsPipeline;
+    MaterialPipeline graphicsPipeline;
 
     std::vector<VkFramebuffer> swapChainFrameBuffers;
     std::vector<VkCommandBuffer> commandBuffers;
