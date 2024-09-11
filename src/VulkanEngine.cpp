@@ -38,8 +38,7 @@ const uint32_t HEIGHT = 600;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-const std::string MODEL_PATH = "models/viking_room.obj";
-const std::string TEXTURE_PATH = "textures/viking_room.png";
+const std::string MODEL_PATH = "models/sphere.obj";
 
 struct UniformBufferObject {
     glm::mat4 model;
@@ -87,7 +86,6 @@ void VulkanEngine::initVulkan() {
     initPipelines();
 
     createDepthResources();
-    createTextureImage();
     initDefaultResources();
 
     loadMeshes();
@@ -497,31 +495,6 @@ void VulkanEngine::createDescriptorSetLayout() {
 
 void VulkanEngine::initPipelines() {
     metalRoughMaterial.buildPipelines(this);
-
-    VkShaderModule vertShaderModule = VulkanUtil::createShaderModule(device, "shaders/vert.spv");
-    VkShaderModule fragShaderModule = VulkanUtil::createShaderModule(device, "shaders/frag.spv");
-
-    PipelineBuilder pipelineBuilder{};
-    pipelineBuilder.setShaders(vertShaderModule, fragShaderModule);
-    pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-    pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-    pipelineBuilder.setMultisamplingNone();
-    pipelineBuilder.enableDepthTest(VK_TRUE, VK_COMPARE_OP_LESS);
-    pipelineBuilder.disableColorBlending();
-    std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { sceneDataDescriptorLayout, metalRoughMaterial.materialLayout, objectDataDescriptorLayout };
-    pipelineBuilder.setDescriptorSetLayouts(descriptorSetLayouts);
-
-    RenderPassBuilder renderPassBuilder;
-    renderPassBuilder.setColorAttachmentFormat(getColorAttachmentFormat());
-    renderPassBuilder.setDepthFormat(getDepthFormat());
-    graphicsPipeline.renderPass = renderPassBuilder.createRenderPass(device);
-
-    pipelineBuilder.buildPipelineLayout(device, &graphicsPipeline.pipelineLayout);
-    pipelineBuilder.buildPipeline(device, graphicsPipeline.renderPass, &graphicsPipeline.pipeline, graphicsPipeline.pipelineLayout);
-
-    vkDestroyShaderModule(device, vertShaderModule, nullptr);
-    vkDestroyShaderModule(device, fragShaderModule, nullptr);
 }
 
 void VulkanEngine::createFrameBuffers() {
@@ -534,7 +507,7 @@ void VulkanEngine::createFrameBuffers() {
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = graphicsPipeline.renderPass;
+        framebufferInfo.renderPass = defaultMetalRough.pipeline->renderPass;
         framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
         framebufferInfo.pAttachments = attachments.data();
         framebufferInfo.width = swapChainExtent.width;
@@ -590,21 +563,21 @@ bool VulkanEngine::hasStencilComponent(VkFormat format) {
     return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-void VulkanEngine::createTextureImage() {
+AllocatedImage VulkanEngine::loadTextureImage(std::string path) {
     int texWidth, texHeight, texChannels;
-    stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels) {
         throw std::runtime_error("failed to load texture image!");
     }
 
-    textureImage = ressourceBuilder.createImage(pixels, {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1},
+    AllocatedImage textureImage = ressourceBuilder.createImage(pixels, {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1},
                                                 VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
                                                 VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
     stbi_image_free(pixels);
-
+    return textureImage;
 }
 
 void VulkanEngine::initDefaultResources() {
@@ -735,7 +708,7 @@ void VulkanEngine::createDescriptorSets() {
         descriptorAllocator.clearWrites();
         descriptorAllocator.writeBuffer(0, objectUniformBuffers[i].buffer, sizeof(ObjectData),
                                         0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        descriptorAllocator.writeImage(1, textureImage.imageView, defaultSamplerNearest,
+        descriptorAllocator.writeImage(1, errorCheckerboardImage.imageView, defaultSamplerNearest,
                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         descriptorAllocator.updateSet(device, objectDescriptorSets[i]);
         descriptorAllocator.clearWrites();
@@ -854,8 +827,10 @@ void VulkanEngine::updateUniformBuffers(uint32_t currentImage) {
 
     SceneData sceneData{};
     ObjectData objectData{};
-    objectData.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    sceneData.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
+    glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), time * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
+    objectData.model = rotate;
+    sceneData.view = glm::lookAt(glm::vec3(4.0f, 4.0f, 4.0f),
                            glm::vec3(0.0f, 0.0f, 0.0f),
                            glm::vec3(0.0f, 0.0f, 1.0f));
     sceneData.proj = glm::perspective(glm::radians(45.0f),
@@ -933,7 +908,6 @@ void VulkanEngine::cleanup() {
     vkDestroySampler(device, defaultSamplerLinear, nullptr);
     vkDestroySampler(device, defaultSamplerNearest, nullptr);
 
-    ressourceBuilder.destroyImage(textureImage);
     ressourceBuilder.destroyImage(whiteImage);
     ressourceBuilder.destroyImage(greyImage);
     ressourceBuilder.destroyImage(blackImage);
@@ -957,10 +931,6 @@ void VulkanEngine::cleanup() {
     }
 
     commandManager.destroyCommandManager();
-
-    vkDestroyPipeline(device, graphicsPipeline.pipeline, nullptr);
-    vkDestroyPipelineLayout(device, graphicsPipeline.pipelineLayout, nullptr);
-    vkDestroyRenderPass(device, graphicsPipeline.renderPass, nullptr);
 
     metalRoughMaterial.clearRessources(device);
 
@@ -1056,7 +1026,7 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
     pipelineBuilder.setShaders(vertShader, fragShader);
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-    pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
     pipelineBuilder.setMultisamplingNone();
     pipelineBuilder.disableColorBlending();
     pipelineBuilder.enableDepthTest(VK_TRUE, VK_COMPARE_OP_LESS);

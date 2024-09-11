@@ -113,14 +113,11 @@ private:
 
     AllocatedImage depthImage;
 
-    MaterialPipeline graphicsPipeline;
-
     std::vector<VkFramebuffer> swapChainFrameBuffers;
     std::vector<VkCommandBuffer> commandBuffers;
 
     MeshAssetBuilder::MeshAsset meshAsset;
 
-    AllocatedImage textureImage;
     AllocatedImage whiteImage;
     AllocatedImage greyImage;
     AllocatedImage blackImage;
@@ -188,7 +185,7 @@ private:
     VkFormat findSupportedFormat(const std::vector<VkFormat> candidates, VkImageTiling tiling,
                                  VkFormatFeatureFlags features);
     bool hasStencilComponent(VkFormat format);
-    void createTextureImage();
+    AllocatedImage loadTextureImage(std::string path);
     void initDefaultResources();
     void createDefaultTextures();
     void createDefaultSamplers();
