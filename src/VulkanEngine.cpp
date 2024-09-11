@@ -837,6 +837,7 @@ void VulkanEngine::updateUniformBuffers(uint32_t currentImage) {
                                 swapChainExtent.width / (float) swapChainExtent.height,
                                 0.1f, 10.0f);
     sceneData.proj[1][1] *= -1; // flip y-axis because glm is for openGL
+    sceneData.viewProj = sceneData.view * sceneData.proj;
 
     memcpy(sceneUniformBuffersMapped[currentImage], &sceneData, sizeof(SceneData));
     memcpy(objectUniformBuffersMapped[currentImage], &objectData, sizeof(ObjectData));
