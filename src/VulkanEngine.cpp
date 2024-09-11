@@ -839,6 +839,10 @@ void VulkanEngine::updateUniformBuffers(uint32_t currentImage) {
     sceneData.proj[1][1] *= -1; // flip y-axis because glm is for openGL
     sceneData.viewProj = sceneData.view * sceneData.proj;
 
+    sceneData.ambientColor = glm::vec4(.1f);
+    sceneData.sunlightColor = glm::vec4(1.f);
+    sceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
+
     memcpy(sceneUniformBuffersMapped[currentImage], &sceneData, sizeof(SceneData));
     memcpy(objectUniformBuffersMapped[currentImage], &objectData, sizeof(ObjectData));
 }

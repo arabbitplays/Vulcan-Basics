@@ -89,7 +89,7 @@ public:
         glm::mat4 viewProj;
         glm::vec4 ambientColor;
         glm::vec4 sunlightDirection; // w for sun power
-        glm::vec4 sunlightPower;
+        glm::vec4 sunlightColor;
     };
 
     struct ObjectData {
