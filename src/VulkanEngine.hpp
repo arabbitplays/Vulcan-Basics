@@ -114,7 +114,6 @@ private:
     AllocatedImage depthImage;
 
     VkRenderPass renderPass;
-    VkDescriptorSetLayout descriptorSetLayout;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
 
@@ -126,11 +125,14 @@ private:
     AllocatedImage textureImage;
     VkSampler textureSampler;
 
-    std::vector<AllocatedBuffer> uniformBuffers;
-    std::vector<void*> uniformBuffersMapped;
+    std::vector<AllocatedBuffer> sceneUniformBuffers;
+    std::vector<void*> sceneUniformBuffersMapped;
+    std::vector<AllocatedBuffer> objectUniformBuffers;
+    std::vector<void*> objectUniformBuffersMapped;
 
     DescriptorAllocator descriptorAllocator;
-    std::vector<VkDescriptorSet> descriptorSets;
+    std::vector<VkDescriptorSet> sceneDescriptorSets;
+    std::vector<VkDescriptorSet> objectDescriptorSets;
 
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;

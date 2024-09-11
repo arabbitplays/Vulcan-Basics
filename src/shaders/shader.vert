@@ -7,14 +7,22 @@ layout(location = 2) in vec2 inTexCoord;
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTextCoord;
 
-layout(binding = 0) uniform UniformBufferObject {
-    mat4 model;
+
+layout(set = 0, binding = 0) uniform SceneData {
     mat4 view;
     mat4 proj;
-} ubo;
+    mat4 viewProj;
+    vec4 ambientColor;
+    vec4 sunlightDirection; // w for sun power
+    vec4 sunlightPower;
+} sceneData;
+
+layout(set = 1, binding = 0) uniform ObjectData {
+    mat4 model;
+} objectData;
 
 void main() {
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
+    gl_Position = sceneData.proj * sceneData.view * objectData.model * vec4(inPosition, 1.0);
     fragColor = inColor;
     fragTextCoord = inTexCoord;
 }

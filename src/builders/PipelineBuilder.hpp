@@ -31,7 +31,7 @@ public:
     void enableDepthTest(VkBool32 enabled, VkCompareOp compareOp);
     void disableColorBlending();
     void enableAdditiveBlending();
-    void setDescriptorSetLayouts(VkDescriptorSetLayout* descriptorSetLayouts);
+    void setDescriptorSetLayouts(std::vector<VkDescriptorSetLayout>& descriptorSetLayouts);
 
 private:
 };

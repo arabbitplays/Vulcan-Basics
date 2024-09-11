@@ -29,8 +29,6 @@ add_executable(${PROJECT_NAME} src/VulkanEngine.cpp
         src/VulkanEngine.hpp
         src/builders/RenderPassBuilder.cpp
         src/builders/RenderPassBuilder.hpp
-        src/rendering/materials/MetallicRoughness.cpp
-        src/rendering/materials/MetallicRoughness.hpp
 )
 
 target_link_libraries(${PROJECT_NAME} glfw glm::glm Vulkan::Vulkan stb::stb tinyobjloader::tinyobjloader)

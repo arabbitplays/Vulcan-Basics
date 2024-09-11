@@ -134,9 +134,9 @@ void PipelineBuilder::enableAdditiveBlending() {
     colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 }
 
-void PipelineBuilder::setDescriptorSetLayouts(VkDescriptorSetLayout* descriptorSetLayouts) {
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts;
+void PipelineBuilder::setDescriptorSetLayouts(std::vector<VkDescriptorSetLayout>& descriptorSetLayouts) {
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
+    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
 }
 
 void PipelineBuilder::clear() {
