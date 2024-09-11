@@ -735,7 +735,7 @@ void VulkanEngine::createDescriptorSets() {
         descriptorAllocator.clearWrites();
         descriptorAllocator.writeBuffer(0, objectUniformBuffers[i].buffer, sizeof(ObjectData),
                                         0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        descriptorAllocator.writeImage(1, errorCheckerboardImage.imageView, defaultSamplerNearest,
+        descriptorAllocator.writeImage(1, textureImage.imageView, defaultSamplerNearest,
                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         descriptorAllocator.updateSet(device, objectDescriptorSets[i]);
         descriptorAllocator.clearWrites();
@@ -875,7 +875,7 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
         throw std::runtime_error("failed to begin record command buffer!");
     }
 
-    MaterialPipeline pipeline = graphicsPipeline;
+    MaterialPipeline pipeline = *defaultMetalRough.pipeline;
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1056,16 +1056,16 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
     pipelineBuilder.setShaders(vertShader, fragShader);
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-    pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+    pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
     pipelineBuilder.setMultisamplingNone();
     pipelineBuilder.disableColorBlending();
-    pipelineBuilder.enableDepthTest(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    pipelineBuilder.enableDepthTest(VK_TRUE, VK_COMPARE_OP_LESS);
 
     pipelineBuilder.buildPipelineLayout(engine->device, &opaquePipeline.pipelineLayout);
     pipelineBuilder.buildPipeline(engine->device, opaquePipeline.renderPass, &opaquePipeline.pipeline, opaquePipeline.pipelineLayout);
 
     pipelineBuilder.enableAdditiveBlending();
-    pipelineBuilder.enableDepthTest(VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    pipelineBuilder.enableDepthTest(VK_FALSE, VK_COMPARE_OP_LESS);
 
     pipelineBuilder.buildPipelineLayout(engine->device, &transparentPipeline.pipelineLayout);
     pipelineBuilder.buildPipeline(engine->device, transparentPipeline.renderPass, &transparentPipeline.pipeline, transparentPipeline.pipelineLayout);
