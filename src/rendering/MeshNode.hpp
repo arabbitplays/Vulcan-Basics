@@ -9,11 +9,13 @@
 #include "Node.hpp"
 #include "../builders/MeshAssetBuilder.hpp"
 
-class MeshNode : public Node {
+struct MeshNode : public Node {
 public:
+    MeshNode() = default;
+
     std::shared_ptr<MeshAsset> meshAsset;
 
-    virtual void draw(const glm::mat4 topMatrix, DrawContext& ctx);
+    void draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 };
 
 

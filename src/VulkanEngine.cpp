@@ -658,17 +658,17 @@ void VulkanEngine::loadMeshes() {
     meshAssetBuilder = *pMeshAssetBuilder;
     meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", MODEL_PATH);
 
+    for (auto& surface : meshAsset.surfaces) {
+        surface.material = std::make_shared<Material>(defaultMetalRough);
+    }
+
     std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
     newNode->meshAsset = std::make_shared<MeshAsset>(meshAsset);
 
     newNode->localTransform = glm::mat4{1.0f};
     newNode->worldTransform = glm::mat4{1.0f};
 
-    for (auto& surface : meshAsset.surfaces) {
-        surface.material = std::make_shared<Material>(defaultMetalRough);
-    }
-
-    loadedNodes.push_back(newNode);
+    loadedNodes[meshAsset.name] = std::move(newNode);
 }
 
 void VulkanEngine::createUniformBuffers() {
@@ -843,8 +843,12 @@ void VulkanEngine::updateScene(uint32_t currentImage) {
     glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
 
     mainDrawContext.opaqueSurfaces.clear();
-    for (auto& node : loadedNodes) {
-        node->draw(rotate, mainDrawContext);
+    for (int x = -3; x < 3; x++) {
+
+        glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3{0.2});
+        glm::mat4 translation =  glm::translate(glm::mat4(1.0f), glm::vec3{x, 1, 0});
+
+        loadedNodes["Sphere"]->draw(translation * scale, mainDrawContext);
     }
 
     SceneData sceneData{};

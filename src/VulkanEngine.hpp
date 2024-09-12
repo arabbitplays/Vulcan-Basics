@@ -119,7 +119,7 @@ private:
     std::vector<VkCommandBuffer> commandBuffers;
 
     MeshAsset meshAsset;
-    std::vector<std::shared_ptr<MeshNode>> loadedNodes;
+    std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
     DrawContext mainDrawContext;
 
     AllocatedImage whiteImage;

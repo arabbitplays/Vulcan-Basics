@@ -12,6 +12,8 @@
 
 class Node : public IRenderable {
 public:
+    Node() = default;
+
     void refreshTransform(const glm::mat4& parentMatrix);
     virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx);
 
