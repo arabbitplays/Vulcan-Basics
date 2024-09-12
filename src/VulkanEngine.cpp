@@ -787,7 +787,7 @@ void VulkanEngine::drawFrame() {
 
     vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
-    updateUniformBuffers(currentFrame);
+    updateScene(currentFrame);
 
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
@@ -832,17 +832,22 @@ void VulkanEngine::drawFrame() {
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanEngine::updateUniformBuffers(uint32_t currentImage) {
+void VulkanEngine::updateScene(uint32_t currentImage) {
     static auto startTime = std::chrono::high_resolution_clock::now();
 
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    SceneData sceneData{};
-    ObjectData objectData{};
+
     glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), time * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
-    objectData.model = rotate;
+
+    mainDrawContext.opaqueSurfaces.clear();
+    for (auto& node : loadedNodes) {
+        node->draw(rotate, mainDrawContext);
+    }
+
+    SceneData sceneData{};
     sceneData.view = glm::lookAt(glm::vec3(4.0f, 4.0f, 4.0f),
                            glm::vec3(0.0f, 0.0f, 0.0f),
                            glm::vec3(0.0f, 0.0f, 1.0f));
@@ -857,7 +862,6 @@ void VulkanEngine::updateUniformBuffers(uint32_t currentImage) {
     sceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
 
     memcpy(sceneUniformBuffersMapped[currentImage], &sceneData, sizeof(SceneData));
-    memcpy(objectUniformBuffersMapped[currentImage], &objectData, sizeof(ObjectData));
 }
 
 void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
@@ -885,13 +889,7 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
-    VkBuffer vertexBuffers[] = {meshAsset.meshBuffers.vertexBuffer.buffer};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-
-    vkCmdBindIndexBuffer(commandBuffer, meshAsset.meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-    std::vector<VkDescriptorSet> descriptorSets = {sceneDescriptorSets[currentFrame], defaultMetalRough.materialSet, objectDescriptorSets[currentFrame]};
+    std::vector<VkDescriptorSet> descriptorSets = {sceneDescriptorSets[currentFrame], defaultMetalRough.materialSet};
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             pipeline.pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()),
                             descriptorSets.data(), 0, nullptr);
@@ -910,7 +908,23 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
     scissor.extent = swapChainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    vkCmdDrawIndexed(commandBuffer, meshAsset.surfaces[0].count, 1, meshAsset.surfaces[0].startIndex, 0, 0);
+    for (auto& renderObject : mainDrawContext.opaqueSurfaces) {
+        VkBuffer vertexBuffers[] = {renderObject.vertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+        vkCmdBindIndexBuffer(commandBuffer, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        ObjectData objectData{};
+        objectData.model = renderObject.transform;
+        memcpy(objectUniformBuffersMapped[currentFrame], &objectData, sizeof(ObjectData));
+
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pipeline.pipelineLayout, 2, 1,
+                                &objectDescriptorSets[currentFrame], 0, nullptr);
+
+        vkCmdDrawIndexed(commandBuffer, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
+    }
 
     vkCmdEndRenderPass(commandBuffer);
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

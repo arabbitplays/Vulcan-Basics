@@ -11,6 +11,7 @@ void MeshNode::draw(const glm::mat4 topMatrix, DrawContext &ctx) {
         RenderObject renderObject;
         renderObject.indexCount = surface.count;
         renderObject.firstIndex = surface.startIndex;
+        renderObject.vertexBuffer = meshAsset->meshBuffers.vertexBuffer.buffer;
         renderObject.indexBuffer = meshAsset->meshBuffers.indexBuffer.buffer;
         renderObject.material = &surface.material->instance;
 
@@ -18,4 +19,6 @@ void MeshNode::draw(const glm::mat4 topMatrix, DrawContext &ctx) {
 
         ctx.opaqueSurfaces.push_back(renderObject);
     }
+
+    Node::draw(topMatrix, ctx);
 }

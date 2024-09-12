@@ -36,6 +36,7 @@
 #include "builders/RenderPassBuilder.hpp"
 #include "rendering/IRenderable.hpp"
 #include "rendering/Node.hpp"
+#include "rendering/MeshNode.hpp"
 
 class VulkanEngine;
 
@@ -118,7 +119,8 @@ private:
     std::vector<VkCommandBuffer> commandBuffers;
 
     MeshAsset meshAsset;
-    std::vector<std::shared_ptr<Node>> loadedNodes;
+    std::vector<std::shared_ptr<MeshNode>> loadedNodes;
+    DrawContext mainDrawContext;
 
     AllocatedImage whiteImage;
     AllocatedImage greyImage;
@@ -201,7 +203,7 @@ private:
     void drawFrame();
     void cleanupSwapChain();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    void updateUniformBuffers(uint32_t currentImage);
+    void updateScene(uint32_t currentImage);
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
             VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,

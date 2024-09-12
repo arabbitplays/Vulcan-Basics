@@ -32,6 +32,7 @@ struct Material {
 struct RenderObject {
     uint32_t indexCount;
     uint32_t firstIndex;
+    VkBuffer vertexBuffer;
     VkBuffer indexBuffer;
 
     MaterialInstance* material;
