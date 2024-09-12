@@ -12,7 +12,7 @@ MeshAssetBuilder::MeshAssetBuilder(VkDevice device, RessourceBuilder bufferBuild
     this->bufferBuilder = bufferBuilder;
 }
 
-MeshAssetBuilder::MeshAsset MeshAssetBuilder::LoadMeshAsset(std::string path) {
+MeshAsset MeshAssetBuilder::LoadMeshAsset(std::string path) {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     loadModel(path, vertices, indices);
@@ -77,7 +77,7 @@ void MeshAssetBuilder::loadModel(std::string path, std::vector<Vertex>& vertices
     std::cout << "Finished loading model!" << std::endl;
 }
 
-AllocatedBuffer MeshAssetBuilder::createVertexBuffer(std::vector<Vertex> vertices) {
+AllocatedBuffer MeshAssetBuilder::createVertexBuffer(std::vector<Vertex>& vertices) {
     VkDeviceSize size = sizeof(vertices[0]) * vertices.size();
 
     AllocatedBuffer stagingBuffer = bufferBuilder.createBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT
@@ -97,7 +97,7 @@ AllocatedBuffer MeshAssetBuilder::createVertexBuffer(std::vector<Vertex> vertice
     return vertexBuffer;
 }
 
-AllocatedBuffer MeshAssetBuilder::createIndexBuffer(std::vector<uint32_t> indices) {
+AllocatedBuffer MeshAssetBuilder::createIndexBuffer(std::vector<uint32_t>& indices) {
     VkDeviceSize size = sizeof(indices[0]) * indices.size();
 
     AllocatedBuffer stagingBuffer = bufferBuilder.createBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT
@@ -117,7 +117,7 @@ AllocatedBuffer MeshAssetBuilder::createIndexBuffer(std::vector<uint32_t> indice
     return indexBuffer;
 }
 
-void MeshAssetBuilder::destroyMeshAsset(MeshAssetBuilder::MeshAsset meshAsset) {
+void MeshAssetBuilder::destroyMeshAsset(MeshAsset& meshAsset) {
     bufferBuilder.destroyBuffer(meshAsset.meshBuffers.vertexBuffer);
     bufferBuilder.destroyBuffer(meshAsset.meshBuffers.indexBuffer);
 }

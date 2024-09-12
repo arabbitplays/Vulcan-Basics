@@ -8,36 +8,39 @@
 
 #include <vulkan/vulkan.h>
 #include <vector>
+#include <bits/shared_ptr.h>
 #include "../CommandManager.hpp"
 #include "../Vertex.hpp"
 #include "RessourceBuilder.hpp"
+#include "../rendering/IRenderable.hpp"
+
+struct MeshBuffers {
+    AllocatedBuffer vertexBuffer;
+    AllocatedBuffer indexBuffer;
+};
+
+struct MeshSurface {
+    uint32_t startIndex;
+    uint32_t count;
+    std::shared_ptr<Material> material;
+};
+
+struct MeshAsset {
+    std::vector<MeshSurface> surfaces;
+    MeshBuffers meshBuffers;
+};
 
 class MeshAssetBuilder {
 public:
-    struct MeshBuffers {
-        AllocatedBuffer vertexBuffer;
-        AllocatedBuffer indexBuffer;
-    };
-
-    struct MeshSurface {
-        uint32_t startIndex;
-        uint32_t count;
-    };
-
-    struct MeshAsset {
-        std::vector<MeshSurface> surfaces;
-        MeshBuffers meshBuffers;
-    };
-
     MeshAssetBuilder() = default;
     MeshAssetBuilder(VkDevice device, RessourceBuilder bufferBuilder);
     MeshAsset LoadMeshAsset(std::string path);
-    void destroyMeshAsset(MeshAsset meshAsset);
+    void destroyMeshAsset(MeshAsset& meshAsset);
 
 private:
     void loadModel(std::string path, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
-    AllocatedBuffer createVertexBuffer(std::vector<Vertex> vertices);
-    AllocatedBuffer createIndexBuffer(std::vector<uint32_t> indices);
+    AllocatedBuffer createVertexBuffer(std::vector<Vertex>& vertices);
+    AllocatedBuffer createIndexBuffer(std::vector<uint32_t>& indices);
 
     VkDevice device;
     RessourceBuilder bufferBuilder;

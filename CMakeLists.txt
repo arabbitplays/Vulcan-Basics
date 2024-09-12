@@ -29,6 +29,10 @@ add_executable(${PROJECT_NAME} src/VulkanEngine.cpp
         src/VulkanEngine.hpp
         src/builders/RenderPassBuilder.cpp
         src/builders/RenderPassBuilder.hpp
+        src/rendering/Node.cpp
+        src/rendering/Node.hpp
+        src/rendering/MeshNode.cpp
+        src/rendering/MeshNode.hpp
 )
 
 target_link_libraries(${PROJECT_NAME} glfw glm::glm Vulkan::Vulkan stb::stb tinyobjloader::tinyobjloader)

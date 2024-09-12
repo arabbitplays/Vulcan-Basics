@@ -116,7 +116,7 @@ private:
     std::vector<VkFramebuffer> swapChainFrameBuffers;
     std::vector<VkCommandBuffer> commandBuffers;
 
-    MeshAssetBuilder::MeshAsset meshAsset;
+    MeshAsset meshAsset;
 
     AllocatedImage whiteImage;
     AllocatedImage greyImage;
@@ -200,7 +200,6 @@ private:
     void cleanupSwapChain();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void updateUniformBuffers(uint32_t currentImage);
-    void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
             VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
