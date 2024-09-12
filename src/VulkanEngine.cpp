@@ -1,5 +1,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "VulkanEngine.hpp"
+#include "rendering/MeshNode.hpp"
 
 const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -655,7 +656,19 @@ void VulkanEngine::createDefaultMaterials() {
 void VulkanEngine::loadMeshes() {
     auto pMeshAssetBuilder = new MeshAssetBuilder(device, ressourceBuilder);
     meshAssetBuilder = *pMeshAssetBuilder;
-    meshAsset = meshAssetBuilder.LoadMeshAsset(MODEL_PATH);
+    meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", MODEL_PATH);
+
+    std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
+    newNode->meshAsset = std::make_shared<MeshAsset>(meshAsset);
+
+    newNode->localTransform = glm::mat4{1.0f};
+    newNode->worldTransform = glm::mat4{1.0f};
+
+    for (auto& surface : meshAsset.surfaces) {
+        surface.material = std::make_shared<Material>(defaultMetalRough);
+    }
+
+    loadedNodes.push_back(newNode);
 }
 
 void VulkanEngine::createUniformBuffers() {

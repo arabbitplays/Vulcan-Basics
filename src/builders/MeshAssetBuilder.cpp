@@ -12,7 +12,7 @@ MeshAssetBuilder::MeshAssetBuilder(VkDevice device, RessourceBuilder bufferBuild
     this->bufferBuilder = bufferBuilder;
 }
 
-MeshAsset MeshAssetBuilder::LoadMeshAsset(std::string path) {
+MeshAsset MeshAssetBuilder::LoadMeshAsset(std::string name, std::string path) {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     loadModel(path, vertices, indices);
@@ -22,6 +22,7 @@ MeshAsset MeshAssetBuilder::LoadMeshAsset(std::string path) {
     meshBuffers.indexBuffer = createIndexBuffer(indices);
 
     MeshAsset meshAsset{};
+    meshAsset.name = name;
     meshAsset.meshBuffers = meshBuffers;
     std::vector<MeshSurface> surfaces;
     surfaces.push_back({0, static_cast<uint32_t>(indices.size())});

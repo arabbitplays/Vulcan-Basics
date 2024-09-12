@@ -35,6 +35,7 @@
 #include "builders/DescriptorLayoutBuilder.hpp"
 #include "builders/RenderPassBuilder.hpp"
 #include "rendering/IRenderable.hpp"
+#include "rendering/Node.hpp"
 
 class VulkanEngine;
 
@@ -117,6 +118,7 @@ private:
     std::vector<VkCommandBuffer> commandBuffers;
 
     MeshAsset meshAsset;
+    std::vector<std::shared_ptr<Node>> loadedNodes;
 
     AllocatedImage whiteImage;
     AllocatedImage greyImage;

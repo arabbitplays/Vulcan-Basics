@@ -26,6 +26,7 @@ struct MeshSurface {
 };
 
 struct MeshAsset {
+    std::string name;
     std::vector<MeshSurface> surfaces;
     MeshBuffers meshBuffers;
 };
@@ -34,7 +35,7 @@ class MeshAssetBuilder {
 public:
     MeshAssetBuilder() = default;
     MeshAssetBuilder(VkDevice device, RessourceBuilder bufferBuilder);
-    MeshAsset LoadMeshAsset(std::string path);
+    MeshAsset LoadMeshAsset(std::string name, std::string path);
     void destroyMeshAsset(MeshAsset& meshAsset);
 
 private:
