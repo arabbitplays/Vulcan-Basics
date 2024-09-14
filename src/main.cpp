@@ -1,6 +1,6 @@
 #include <exception>
 #include <iostream>
-#include "VulkanEngine.hpp"
+#include "rendering/engine/VulkanEngine.hpp"
 
 int main() {
     VulkanEngine app;

@@ -1,6 +1,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "VulkanEngine.hpp"
-#include "rendering/MeshNode.hpp"
+#include "../nodes/MeshNode.hpp"
 
 const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -484,14 +484,15 @@ void VulkanEngine::createImageViews() {
 void VulkanEngine::createDescriptorSetLayout() {
     DescriptorLayoutBuilder layoutBuilder;
 
-    layoutBuilder.clearBindings();
+    layoutBuilder.clear();
     layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     sceneDataDescriptorLayout = layoutBuilder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    layoutBuilder.clearBindings();
-    layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    objectDataDescriptorLayout = layoutBuilder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    VkPushConstantRange range{};
+    range.size = sizeof(ObjectData);
+    range.offset = 0;
+    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    objectDataCostantRange = range;
 }
 
 void VulkanEngine::initPipelines() {
@@ -683,18 +684,6 @@ void VulkanEngine::createUniformBuffers() {
 
         vkMapMemory(device, sceneUniformBuffers[i].bufferMemory, 0, size, 0, &sceneUniformBuffersMapped[i]);
     }
-
-    size = sizeof(ObjectData);
-
-    objectUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    objectUniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        objectUniformBuffers[i] = ressourceBuilder.createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        vkMapMemory(device, objectUniformBuffers[i].bufferMemory, 0, size, 0, &objectUniformBuffersMapped[i]);
-    }
 }
 
 void VulkanEngine::createDescriptorAllocator() {
@@ -707,24 +696,16 @@ void VulkanEngine::createDescriptorAllocator() {
 
 void VulkanEngine::createDescriptorSets() {
     sceneDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-    objectDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         sceneDescriptorSets[i] = descriptorAllocator.allocate(device, sceneDataDescriptorLayout, nullptr);
-        objectDescriptorSets[i] = descriptorAllocator.allocate(device, objectDataDescriptorLayout, nullptr);
     }
 
     for (size_t i = 0; i < sceneDescriptorSets.size(); i++) {
+        descriptorAllocator.clearWrites();
         descriptorAllocator.writeBuffer(0, sceneUniformBuffers[i].buffer, sizeof(SceneData),
                                         0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         descriptorAllocator.updateSet(device, sceneDescriptorSets[i]);
-        descriptorAllocator.clearWrites();
-        descriptorAllocator.writeBuffer(0, objectUniformBuffers[i].buffer, sizeof(ObjectData),
-                                        0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        descriptorAllocator.writeImage(1, errorCheckerboardImage.imageView, defaultSamplerNearest,
-                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        descriptorAllocator.updateSet(device, objectDescriptorSets[i]);
-        descriptorAllocator.clearWrites();
     }
 }
 
@@ -838,23 +819,21 @@ void VulkanEngine::updateScene(uint32_t currentImage) {
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-
-    glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), time * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
+    //glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), time * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    //glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
 
     mainDrawContext.opaqueSurfaces.clear();
-    for (int x = -3; x < 3; x++) {
-
-        glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3{0.2});
-        glm::mat4 translation =  glm::translate(glm::mat4(1.0f), glm::vec3{x, 1, 0});
-
+    for (int x = -2; x <= 2; x++) {
+        glm::mat4 translation =  glm::translate(glm::mat4(1.0f), glm::vec3{x, 0, 0});
+        glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.4f));
         loadedNodes["Sphere"]->draw(translation * scale, mainDrawContext);
     }
 
     SceneData sceneData{};
-    sceneData.view = glm::lookAt(glm::vec3(4.0f, 4.0f, 4.0f),
+    sceneData.view = glm::translate(glm::mat4(1.0f), glm::vec3{ 0,0,-5 });
+    /*sceneData.view = glm::lookAt(glm::vec3(4.0f, 4.0f, 4.0f),
                            glm::vec3(0.0f, 0.0f, 0.0f),
-                           glm::vec3(0.0f, 0.0f, 1.0f));
+                           glm::vec3(0.0f, 0.0f, 1.0f));*/
     sceneData.proj = glm::perspective(glm::radians(45.0f),
                                 swapChainExtent.width / (float) swapChainExtent.height,
                                 0.1f, 10.0f);
@@ -863,7 +842,7 @@ void VulkanEngine::updateScene(uint32_t currentImage) {
 
     sceneData.ambientColor = glm::vec4(.1f);
     sceneData.sunlightColor = glm::vec4(1.f);
-    sceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
+    sceneData.sunlightDirection = glm::vec4(0,1,2.f,1.f);
 
     memcpy(sceneUniformBuffersMapped[currentImage], &sceneData, sizeof(SceneData));
 }
@@ -921,11 +900,8 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
 
         ObjectData objectData{};
         objectData.model = renderObject.transform;
-        memcpy(objectUniformBuffersMapped[currentFrame], &objectData, sizeof(ObjectData));
-
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                pipeline.pipelineLayout, 2, 1,
-                                &objectDescriptorSets[currentFrame], 0, nullptr);
+        vkCmdPushConstants(commandBuffer, pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT,
+                           0, sizeof(ObjectData), &objectData);
 
         vkCmdDrawIndexed(commandBuffer, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
     }
@@ -938,26 +914,23 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
 
 void VulkanEngine::cleanup() {
     ressourceBuilder.destroyImage(depthImage);
+    ressourceBuilder.destroyImage(whiteImage);
+    ressourceBuilder.destroyImage(greyImage);
+    ressourceBuilder.destroyImage(blackImage);
+    ressourceBuilder.destroyImage(errorCheckerboardImage);
 
     cleanupSwapChain();
 
     vkDestroySampler(device, defaultSamplerLinear, nullptr);
     vkDestroySampler(device, defaultSamplerNearest, nullptr);
 
-    ressourceBuilder.destroyImage(whiteImage);
-    ressourceBuilder.destroyImage(greyImage);
-    ressourceBuilder.destroyImage(blackImage);
-    ressourceBuilder.destroyImage(errorCheckerboardImage);
-
     for (size_t i = 0; i < sceneUniformBuffers.size(); i++) {
         ressourceBuilder.destroyBuffer(sceneUniformBuffers[i]);
-        ressourceBuilder.destroyBuffer(objectUniformBuffers[i]);
     }
     ressourceBuilder.destroyBuffer(materialBuffer);
 
     descriptorAllocator.destroyPools(device);
     vkDestroyDescriptorSetLayout(device, sceneDataDescriptorLayout, nullptr);
-    vkDestroyDescriptorSetLayout(device, objectDataDescriptorLayout, nullptr);
 
     meshAssetBuilder.destroyMeshAsset(meshAsset);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -1048,8 +1021,9 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
     layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
     materialLayout = layoutBuilder.build(engine->device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    std::vector<VkDescriptorSetLayout> layouts = {engine->sceneDataDescriptorLayout, materialLayout};
 
-    std::vector<VkDescriptorSetLayout> layouts = {engine->sceneDataDescriptorLayout, materialLayout, engine->objectDataDescriptorLayout};
+    std::vector<VkPushConstantRange> ranges{engine->objectDataCostantRange};
 
     RenderPassBuilder renderPassBuilder;
     renderPassBuilder.setColorAttachmentFormat(engine->getColorAttachmentFormat());
@@ -1059,6 +1033,7 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
 
     PipelineBuilder pipelineBuilder;
     pipelineBuilder.setDescriptorSetLayouts(layouts);
+    pipelineBuilder.setPushConstantRanges(ranges);
     pipelineBuilder.setShaders(vertShader, fragShader);
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);

@@ -9,8 +9,8 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <bits/shared_ptr.h>
-#include "../CommandManager.hpp"
-#include "../Vertex.hpp"
+#include "../rendering/engine/CommandManager.hpp"
+#include "../rendering/Vertex.hpp"
 #include "RessourceBuilder.hpp"
 #include "../rendering/IRenderable.hpp"
 

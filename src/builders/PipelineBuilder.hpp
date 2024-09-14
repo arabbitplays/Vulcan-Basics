@@ -32,6 +32,7 @@ public:
     void disableColorBlending();
     void enableAdditiveBlending();
     void setDescriptorSetLayouts(std::vector<VkDescriptorSetLayout>& descriptorSetLayouts);
+    void setPushConstantRanges(std::vector<VkPushConstantRange>& ranges);
 
 private:
 };

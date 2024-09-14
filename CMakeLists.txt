@@ -9,30 +9,30 @@ find_package(Vulkan REQUIRED)
 find_package(stb REQUIRED)
 find_package(tinyobjloader)
 
-add_executable(${PROJECT_NAME} src/VulkanEngine.cpp
-        src/Vertex.hpp
+add_executable(${PROJECT_NAME} src/rendering/engine/VulkanEngine.cpp
+        src/rendering/Vertex.hpp
         src/builders/PipelineBuilder.cpp
         src/builders/PipelineBuilder.hpp
-        src/DescriptorAllocator.cpp
-        src/DescriptorAllocator.hpp
+        src/rendering/engine/DescriptorAllocator.cpp
+        src/rendering/engine/DescriptorAllocator.hpp
         src/builders/MeshAssetBuilder.cpp
         src/builders/MeshAssetBuilder.hpp
-        src/CommandManager.cpp
-        src/CommandManager.hpp
+        src/rendering/engine/CommandManager.cpp
+        src/rendering/engine/CommandManager.hpp
         src/builders/RessourceBuilder.cpp
         src/builders/RessourceBuilder.hpp
         src/rendering/IRenderable.hpp
-        src/VulkanUtil.hpp
+        src/util/VulkanUtil.hpp
         src/builders/DescriptorLayoutBuilder.cpp
         src/builders/DescriptorLayoutBuilder.hpp
         src/main.cpp
-        src/VulkanEngine.hpp
+        src/rendering/engine/VulkanEngine.hpp
         src/builders/RenderPassBuilder.cpp
         src/builders/RenderPassBuilder.hpp
-        src/rendering/Node.cpp
-        src/rendering/Node.hpp
-        src/rendering/MeshNode.cpp
-        src/rendering/MeshNode.hpp
+        src/rendering/nodes/Node.cpp
+        src/rendering/nodes/Node.hpp
+        src/rendering/nodes/MeshNode.cpp
+        src/rendering/nodes/MeshNode.hpp
 )
 
 target_link_libraries(${PROJECT_NAME} glfw glm::glm Vulkan::Vulkan stb::stb tinyobjloader::tinyobjloader)

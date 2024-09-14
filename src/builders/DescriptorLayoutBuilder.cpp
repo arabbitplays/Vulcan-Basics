@@ -34,6 +34,6 @@ VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device, uint32_t s
     return layout;
 }
 
-void DescriptorLayoutBuilder::clearBindings() {
+void DescriptorLayoutBuilder::clear() {
     bindings.clear();
 }

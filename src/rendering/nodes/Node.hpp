@@ -8,7 +8,7 @@
 
 #include <chrono>
 #include <glm/glm.hpp>
-#include "IRenderable.hpp"
+#include "../IRenderable.hpp"
 
 class Node : public IRenderable {
 public:

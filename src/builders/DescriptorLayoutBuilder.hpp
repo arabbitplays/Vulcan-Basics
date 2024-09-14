@@ -13,7 +13,7 @@ class DescriptorLayoutBuilder {
 public:
     void addBinding(uint32_t binding, VkDescriptorType type);
     VkDescriptorSetLayout build(VkDevice device, uint32_t stageFlags);
-    void clearBindings();
+    void clear();
 
 private:
     std::vector<VkDescriptorSetLayoutBinding> bindings;

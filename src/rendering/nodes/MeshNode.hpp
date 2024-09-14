@@ -7,7 +7,7 @@
 
 
 #include "Node.hpp"
-#include "../builders/MeshAssetBuilder.hpp"
+#include "../../builders/MeshAssetBuilder.hpp"
 
 struct MeshNode : public Node {
 public:

@@ -26,17 +26,17 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 #include <unordered_map>
-#include "Vertex.hpp"
-#include "builders/PipelineBuilder.hpp"
+#include "../Vertex.hpp"
+#include "../../builders/PipelineBuilder.hpp"
 #include "DescriptorAllocator.hpp"
 #include "CommandManager.hpp"
-#include "builders/MeshAssetBuilder.hpp"
-#include "VulkanUtil.hpp"
-#include "builders/DescriptorLayoutBuilder.hpp"
-#include "builders/RenderPassBuilder.hpp"
-#include "rendering/IRenderable.hpp"
-#include "rendering/Node.hpp"
-#include "rendering/MeshNode.hpp"
+#include "../../builders/MeshAssetBuilder.hpp"
+#include "../../util/VulkanUtil.hpp"
+#include "../../builders/DescriptorLayoutBuilder.hpp"
+#include "../../builders/RenderPassBuilder.hpp"
+#include "../IRenderable.hpp"
+#include "../nodes/Node.hpp"
+#include "../nodes/MeshNode.hpp"
 
 class VulkanEngine;
 
@@ -71,6 +71,20 @@ struct MetallicRoughness {
                                    const MaterialResources& resources, DescriptorAllocator allocator);
 };
 
+
+struct SceneData {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewProj;
+    glm::vec4 ambientColor;
+    glm::vec4 sunlightDirection; // w for sun power
+    glm::vec4 sunlightColor;
+};
+
+struct ObjectData {
+    glm::mat4 model;
+};
+
 class VulkanEngine {
 public:
     VkDevice device;
@@ -79,24 +93,11 @@ public:
     MeshAssetBuilder meshAssetBuilder;
 
     VkDescriptorSetLayout sceneDataDescriptorLayout;
-    VkDescriptorSetLayout objectDataDescriptorLayout;
+    VkPushConstantRange objectDataCostantRange;
 
     void run();
     VkFormat getColorAttachmentFormat();
     VkFormat getDepthFormat();
-
-    struct SceneData {
-        glm::mat4 view;
-        glm::mat4 proj;
-        glm::mat4 viewProj;
-        glm::vec4 ambientColor;
-        glm::vec4 sunlightDirection; // w for sun power
-        glm::vec4 sunlightColor;
-    };
-
-    struct ObjectData {
-        glm::mat4 model;
-    };
 
 private:
     GLFWwindow* window;
@@ -132,12 +133,9 @@ private:
 
     std::vector<AllocatedBuffer> sceneUniformBuffers;
     std::vector<void*> sceneUniformBuffersMapped;
-    std::vector<AllocatedBuffer> objectUniformBuffers;
-    std::vector<void*> objectUniformBuffersMapped;
 
     DescriptorAllocator descriptorAllocator;
     std::vector<VkDescriptorSet> sceneDescriptorSets;
-    std::vector<VkDescriptorSet> objectDescriptorSets;
 
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;

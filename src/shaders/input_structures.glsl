@@ -14,7 +14,3 @@ layout(set = 1, binding = 0) uniform MaterialData {
 
 layout(set = 1, binding = 1) uniform sampler2D colorTex;
 layout(set = 1, binding = 2) uniform sampler2D metalRoughTex;
-
-layout(set = 2, binding = 0) uniform ObjectData {
-    mat4 model;
-} objectData;

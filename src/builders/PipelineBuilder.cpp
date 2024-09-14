@@ -1,6 +1,6 @@
 #include <string>
 #include "PipelineBuilder.hpp"
-#include "../Vertex.hpp"
+#include "../rendering/Vertex.hpp"
 
 void PipelineBuilder::buildPipeline(VkDevice& device, VkRenderPass& renderPass, VkPipeline* pipeline, VkPipelineLayout& pipelineLayout) {
 
@@ -137,6 +137,11 @@ void PipelineBuilder::enableAdditiveBlending() {
 void PipelineBuilder::setDescriptorSetLayouts(std::vector<VkDescriptorSetLayout>& descriptorSetLayouts) {
     pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
+}
+
+void PipelineBuilder::setPushConstantRanges(std::vector<VkPushConstantRange> &ranges) {
+    pipelineLayoutInfo.pushConstantRangeCount = static_cast<uint32_t>(ranges.size());
+    pipelineLayoutInfo.pPushConstantRanges = ranges.data();
 }
 
 void PipelineBuilder::clear() {
