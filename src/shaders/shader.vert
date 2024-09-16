@@ -12,13 +12,16 @@ layout( push_constant ) uniform constants
     mat4 model;
 } objectData;
 
-layout(location = 0) out vec3 outNormal;
-layout(location = 1) out vec3 outColor;
-layout(location = 2) out vec2 outUV;
+layout(location = 0) out vec3 outPos;
+layout(location = 1) out vec3 outNormal;
+layout(location = 2) out vec3 outColor;
+layout(location = 3) out vec2 outUV;
 
 void main() {
     gl_Position = sceneData.proj * sceneData.view * objectData.model * vec4(inPosition, 1.0);
     outColor = inColor * materialData.colorFactors.xyz;
     outUV = inUV;
-    outNormal = (objectData.model * vec4(inNormal, 0.0)).xyz;
+    mat3 normalMatrix = mat3(transpose(inverse(objectData.model)));
+    outNormal = normalMatrix * inNormal;
+    outPos = (objectData.model  * vec4(inPosition, 1.0)).xyz;
 }

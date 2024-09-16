@@ -1,6 +1,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "VulkanEngine.hpp"
 #include "../nodes/MeshNode.hpp"
+#include "../../Analytics.hpp"
 
 const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -193,6 +194,9 @@ void VulkanEngine::setupDebugMessenger() {
     if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
         throw std::runtime_error("failed to set up debug messenger!");
     }
+
+    auto pAnalytics = new Analytics();
+    analytics = *pAnalytics;
 }
 
 void VulkanEngine::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
@@ -630,6 +634,10 @@ void VulkanEngine::createDefaultSamplers() {
 }
 
 void VulkanEngine::createDefaultMaterials() {
+    defaultMetalRough = createMetalRoughMaterial(1.0f, 0.5f, glm::vec3{1, 1, 1});
+}
+
+MaterialInstance VulkanEngine::createMetalRoughMaterial(float metallic, float roughness, glm::vec3 albedo) {
     MetallicRoughness::MaterialResources resources{};
     resources.colorImage = whiteImage;
     resources.colorSampler = defaultSamplerLinear;
@@ -637,12 +645,13 @@ void VulkanEngine::createDefaultMaterials() {
     resources.metalRoughSampler = defaultSamplerLinear;
 
     MetallicRoughness::MaterialConstants constants{};
-    constants.colorFactors = {1, 1, 1, 1};
-    constants.metalRoughFactors = {1, 0.5f, 0, 0};
+    constants.colorFactors = {albedo,1};
+    constants.metalRoughFactors = {metallic, roughness, 0, 0};
 
     VkDeviceSize bufferSize = sizeof(MetallicRoughness::MaterialConstants);
-    materialBuffer = ressourceBuilder.createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    AllocatedBuffer materialBuffer = ressourceBuilder.createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    materialBuffers.push_back(materialBuffer);
     void* data;
     vkMapMemory(device, materialBuffer.bufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, &constants, bufferSize);
@@ -651,25 +660,34 @@ void VulkanEngine::createDefaultMaterials() {
     resources.dataBuffer = materialBuffer.buffer;
     resources.bufferOffset = 0;
 
-    defaultMetalRough = metalRoughMaterial.writeMaterial(device, MaterialPass::MainColor, resources, descriptorAllocator);
+    return metalRoughMaterial.writeMaterial(device, MaterialPass::MainColor, resources, descriptorAllocator);
 }
 
 void VulkanEngine::loadMeshes() {
     auto pMeshAssetBuilder = new MeshAssetBuilder(device, ressourceBuilder);
     meshAssetBuilder = *pMeshAssetBuilder;
-    meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", MODEL_PATH);
 
-    for (auto& surface : meshAsset.surfaces) {
-        surface.material = std::make_shared<Material>(defaultMetalRough);
+    for (int x = 0; x < 5; x++) {
+        for (int y = 0; y < 5; y++) {
+            MeshAsset meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", MODEL_PATH);
+            meshAssets.push_back(meshAsset);
+            for (auto& surface : meshAsset.surfaces) {
+                MaterialInstance material = createMetalRoughMaterial(0.1f + 0.2f * (float)y, 0.1f + 0.2f * (float)x, glm::vec3{1, 0, 0});
+                surface.material = std::make_shared<Material>(material);
+            }
+
+            std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
+            newNode->meshAsset = std::make_shared<MeshAsset>(meshAsset);
+
+            glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3{x - 2, y - 2, 0});
+            glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.4f));
+            newNode->localTransform = translation * scale;
+            newNode->worldTransform = glm::mat4{1.0f};
+            newNode->refreshTransform(glm::mat4(1.0f));
+
+            loadedNodes[meshAsset.name + (char)x + (char)y] = std::move(newNode);
+        }
     }
-
-    std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
-    newNode->meshAsset = std::make_shared<MeshAsset>(meshAsset);
-
-    newNode->localTransform = glm::mat4{1.0f};
-    newNode->worldTransform = glm::mat4{1.0f};
-
-    loadedNodes[meshAsset.name] = std::move(newNode);
 }
 
 void VulkanEngine::createUniformBuffers() {
@@ -691,7 +709,7 @@ void VulkanEngine::createDescriptorAllocator() {
             { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
             { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 },
     };
-    descriptorAllocator.init(device, MAX_FRAMES_IN_FLIGHT * 3, poolRatios);
+    descriptorAllocator.init(device, 60, poolRatios);
 }
 
 void VulkanEngine::createDescriptorSets() {
@@ -756,8 +774,10 @@ void VulkanEngine::mainLoop() {
 void VulkanEngine::drawFrame() {
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
+    analytics.endFrame();
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+    analytics.startFrame();
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         recreateSwapChain();
@@ -814,23 +834,13 @@ void VulkanEngine::drawFrame() {
 }
 
 void VulkanEngine::updateScene(uint32_t currentImage) {
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-    //glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), time * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    //glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
-
     mainDrawContext.opaqueSurfaces.clear();
-    for (int x = -2; x <= 2; x++) {
-        glm::mat4 translation =  glm::translate(glm::mat4(1.0f), glm::vec3{x, 0, 0});
-        glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.4f));
-        loadedNodes["Sphere"]->draw(translation * scale, mainDrawContext);
+    for (auto& pair : loadedNodes) {
+        pair.second->draw(glm::mat4(1.0f), mainDrawContext);
     }
 
     SceneData sceneData{};
-    sceneData.view = glm::translate(glm::mat4(1.0f), glm::vec3{ 0,0,-5 });
+    sceneData.view = glm::translate(glm::mat4(1.0f), glm::vec3{ 0,0,-6 });
     /*sceneData.view = glm::lookAt(glm::vec3(4.0f, 4.0f, 4.0f),
                            glm::vec3(0.0f, 0.0f, 0.0f),
                            glm::vec3(0.0f, 0.0f, 1.0f));*/
@@ -840,9 +850,11 @@ void VulkanEngine::updateScene(uint32_t currentImage) {
     sceneData.proj[1][1] *= -1; // flip y-axis because glm is for openGL
     sceneData.viewProj = sceneData.view * sceneData.proj;
 
-    sceneData.ambientColor = glm::vec4(.1f);
+    sceneData.viewPos = glm::vec4{ 0,0,6, 0 };
+
+    sceneData.ambientColor = glm::vec4(1.f);
     sceneData.sunlightColor = glm::vec4(1.f);
-    sceneData.sunlightDirection = glm::vec4(0,1,2.f,1.f);
+    sceneData.sunlightDirection = glm::vec4(-1,1,2,1.f);
 
     memcpy(sceneUniformBuffersMapped[currentImage], &sceneData, sizeof(SceneData));
 }
@@ -872,10 +884,9 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
-    std::vector<VkDescriptorSet> descriptorSets = {sceneDescriptorSets[currentFrame], defaultMetalRough.materialSet};
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipeline.pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()),
-                            descriptorSets.data(), 0, nullptr);
+                            pipeline.pipelineLayout, 0, 1,
+                            &sceneDescriptorSets[currentFrame], 0, nullptr);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -898,6 +909,10 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
 
         vkCmdBindIndexBuffer(commandBuffer, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pipeline.pipelineLayout, 1, 1,
+                                &renderObject.material->materialSet, 0, nullptr);
+
         ObjectData objectData{};
         objectData.model = renderObject.transform;
         vkCmdPushConstants(commandBuffer, pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT,
@@ -914,6 +929,7 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
 
 void VulkanEngine::cleanup() {
     ressourceBuilder.destroyImage(depthImage);
+
     ressourceBuilder.destroyImage(whiteImage);
     ressourceBuilder.destroyImage(greyImage);
     ressourceBuilder.destroyImage(blackImage);
@@ -927,12 +943,16 @@ void VulkanEngine::cleanup() {
     for (size_t i = 0; i < sceneUniformBuffers.size(); i++) {
         ressourceBuilder.destroyBuffer(sceneUniformBuffers[i]);
     }
-    ressourceBuilder.destroyBuffer(materialBuffer);
+    for (auto& materialBuffer : materialBuffers) {
+        ressourceBuilder.destroyBuffer(materialBuffer);
+    }
 
     descriptorAllocator.destroyPools(device);
     vkDestroyDescriptorSetLayout(device, sceneDataDescriptorLayout, nullptr);
 
-    meshAssetBuilder.destroyMeshAsset(meshAsset);
+    for (auto& meshAsset : meshAssets) {
+        meshAssetBuilder.destroyMeshAsset(meshAsset);
+    }
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
         vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);

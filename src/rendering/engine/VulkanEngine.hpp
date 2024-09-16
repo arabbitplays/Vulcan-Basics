@@ -37,6 +37,7 @@
 #include "../IRenderable.hpp"
 #include "../nodes/Node.hpp"
 #include "../nodes/MeshNode.hpp"
+#include "../../Analytics.hpp"
 
 class VulkanEngine;
 
@@ -71,11 +72,11 @@ struct MetallicRoughness {
                                    const MaterialResources& resources, DescriptorAllocator allocator);
 };
 
-
 struct SceneData {
     glm::mat4 view;
     glm::mat4 proj;
     glm::mat4 viewProj;
+    glm::vec4 viewPos;
     glm::vec4 ambientColor;
     glm::vec4 sunlightDirection; // w for sun power
     glm::vec4 sunlightColor;
@@ -104,6 +105,7 @@ private:
     VkInstance instance;
     VkSurfaceKHR surface;
     VkDebugUtilsMessengerEXT debugMessenger;
+    Analytics analytics;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkQueue graphicsQueue, presentQueue;
@@ -119,7 +121,7 @@ private:
     std::vector<VkFramebuffer> swapChainFrameBuffers;
     std::vector<VkCommandBuffer> commandBuffers;
 
-    MeshAsset meshAsset;
+    std::vector<MeshAsset> meshAssets;
     std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
     DrawContext mainDrawContext;
 
@@ -146,7 +148,7 @@ private:
 
     MaterialInstance defaultMetalRough;
     MetallicRoughness metalRoughMaterial;
-    AllocatedBuffer materialBuffer; // TODO weg damit da nur da zum destroyen am End
+    std::vector<AllocatedBuffer> materialBuffers; // TODO weg damit da nur da zum destroyen am End
 
     void initWindow();
     void initVulkan();
@@ -213,6 +215,8 @@ private:
 
         return VK_FALSE;
     }
+
+    MaterialInstance createMetalRoughMaterial(float metallic, float roughness, glm::vec3 albedo);
 };
 
 #endif //BASICS_VULKANENGINE_HPP
