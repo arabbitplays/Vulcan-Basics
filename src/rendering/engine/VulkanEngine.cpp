@@ -667,17 +667,16 @@ void VulkanEngine::loadMeshes() {
     auto pMeshAssetBuilder = new MeshAssetBuilder(device, ressourceBuilder);
     meshAssetBuilder = *pMeshAssetBuilder;
 
+    MeshAsset meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", MODEL_PATH);
+    meshAssets.push_back(meshAsset);
+
     for (int x = 0; x < 5; x++) {
         for (int y = 0; y < 5; y++) {
-            MeshAsset meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", MODEL_PATH);
-            meshAssets.push_back(meshAsset);
-            for (auto& surface : meshAsset.surfaces) {
-                MaterialInstance material = createMetalRoughMaterial(0.1f + 0.2f * (float)y, 0.01f + 0.2f * (float)x, glm::vec3{1, 1, 1});
-                surface.material = std::make_shared<Material>(material);
-            }
-
             std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
             newNode->meshAsset = std::make_shared<MeshAsset>(meshAsset);
+
+            MaterialInstance material = createMetalRoughMaterial(0.1f + 0.2f * (float)y, 0.01f + 0.2f * (float)x, glm::vec3{1, 1, 1});
+            newNode->material = std::make_shared<Material>(material);
 
             glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3{x - 2, y - 2, 0});
             glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.4f));
@@ -851,10 +850,10 @@ void VulkanEngine::updateScene(uint32_t currentImage) {
     sceneData.viewProj = sceneData.view * sceneData.proj;
 
     sceneData.viewPos = glm::vec4{ 0,0,6, 0 };
-    sceneData.pointLightPositions = {glm::vec4{1, 1, 3, 0}, glm::vec4{1, -1, 3, 0},
-                                     glm::vec4{-1, 1, 3, 0}, glm::vec4{-1, -1, 3, 0}};
-    sceneData.pointLightColors = {glm::vec4{1, 0, 0, 1}, glm::vec4{0, 1, 0, 1},
-                                  glm::vec4{0, 0, 1, 1}, glm::vec4{1, 1, 1, 1}};
+    sceneData.pointLightPositions = {glm::vec4{1, 1, 3, 1}, glm::vec4{1, -1, 3, 1},
+                                     glm::vec4{-1, 1, 3, 1}, glm::vec4{-1, -1, 3, 1}};
+    sceneData.pointLightColors = {glm::vec4{1, 0, 0, 0}, glm::vec4{0, 1, 0, 0},
+                                  glm::vec4{0, 0, 1, 0}, glm::vec4{1, 1, 1, 0}};
 
     sceneData.ambientColor = glm::vec4(1.f);
     sceneData.sunlightColor = glm::vec4(1.f);

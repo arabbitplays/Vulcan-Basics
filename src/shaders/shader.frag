@@ -22,23 +22,31 @@ void main() {
 
     vec3 outRadiance = vec3(0.0f);
     for (int i = 0; i < POINT_LIGHT_COUNT; i++) {
-        vec3 l = normalize(sceneData.pointLightPositions[i] - inPos);
+        vec3 l = normalize(sceneData.pointLightPositions[i].xyz - inPos);
         vec3 h = normalize(l + v);
 
-        float distance = length(sceneData.pointLightPositions[i] - inPos);
+        float distance = length(sceneData.pointLightPositions[i].xyz - inPos);
         float attenuation = 1.0 / (distance * distance);
-        vec3 inRadiance = sceneData.pointLightColors[i].xyz * attenuation * sceneData.pointLightColors[i].w;
+        vec3 inRadiance = sceneData.pointLightColors[i] * attenuation * sceneData.pointLightPositions[i].w;
 
         vec3 brdf = calcBRDF(l, v, n, h, albedo, metallic, roughness);
         outRadiance += brdf * inRadiance * max(dot(n, l), 0.0);
     }
 
+    vec3 l = normalize(sceneData.sunlightDirection.xyz);
+    vec3 h = normalize(l + v);
+
+    vec3 inRadiance = sceneData.sunlightColor * sceneData.sunlightDirection.w;
+
+    vec3 brdf = calcBRDF(l, v, n, h, albedo, metallic, roughness);
+    outRadiance += brdf * inRadiance * max(dot(n, l), 0.0);
+
     vec3 ambient = vec3(0.01) * albedo;
     vec3 color = ambient + outRadiance;
 
     // gamma correction
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0 / 2.2));
+    //color = color / (color + vec3(1.0));
+    //color = pow(color, vec3(1.0 / 2.2));
 
     outColor = vec4(color, 1.0);
 }

@@ -22,7 +22,6 @@ struct MeshBuffers {
 struct MeshSurface {
     uint32_t startIndex;
     uint32_t count;
-    std::shared_ptr<Material> material;
 };
 
 struct MeshAsset {
