@@ -38,6 +38,7 @@
 #include "../nodes/Node.hpp"
 #include "../nodes/MeshNode.hpp"
 #include "../../Analytics.hpp"
+#include "DeletionQueue.hpp"
 
 class VulkanEngine;
 
@@ -108,6 +109,7 @@ private:
     VkSurfaceKHR surface;
     VkDebugUtilsMessengerEXT debugMessenger;
     Analytics analytics;
+    DeletionQueue mainDeletionQueue;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkQueue graphicsQueue, presentQueue;

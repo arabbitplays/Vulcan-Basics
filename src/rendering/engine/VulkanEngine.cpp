@@ -40,8 +40,6 @@ const uint32_t HEIGHT = 600;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-const std::string MODEL_PATH = "models/sphere.obj";
-
 struct UniformBufferObject {
     glm::mat4 model;
     glm::mat4 view;
@@ -145,6 +143,10 @@ void VulkanEngine::createInstance() {
     if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
         throw std::runtime_error("failed to create instance!");
     }
+
+    mainDeletionQueue.pushFunction([&]() {
+        vkDestroyInstance(instance, nullptr);
+    });
 }
 
 bool VulkanEngine::checkValidationLayerSupport() {
@@ -197,6 +199,8 @@ void VulkanEngine::setupDebugMessenger() {
 
     auto pAnalytics = new Analytics();
     analytics = *pAnalytics;
+
+
 }
 
 void VulkanEngine::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
@@ -216,6 +220,10 @@ void VulkanEngine::createSurface() {
     if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
         throw std::runtime_error("failed to create window surface!");
     }
+
+    mainDeletionQueue.pushFunction([&]() {
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+    });
 }
 
 void VulkanEngine::pickPhysicalDevice() {
@@ -667,8 +675,16 @@ void VulkanEngine::loadMeshes() {
     auto pMeshAssetBuilder = new MeshAssetBuilder(device, ressourceBuilder);
     meshAssetBuilder = *pMeshAssetBuilder;
 
-    MeshAsset meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", MODEL_PATH);
+    MeshAsset meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", "models/sphere.obj");
     meshAssets.push_back(meshAsset);
+    meshAsset = meshAssetBuilder.LoadMeshAsset("VikingRoom", "models/viking_room.obj");
+    meshAssets.push_back(meshAsset);
+
+    std::shared_ptr<Node> parentNode = std::make_shared<Node>();
+    parentNode->localTransform = glm::mat4{1.0f};
+    parentNode->worldTransform = glm::mat4{1.0f};
+    parentNode->children = {};
+    loadedNodes["Spheres"] = std::move(parentNode);
 
     for (int x = 0; x < 5; x++) {
         for (int y = 0; y < 5; y++) {
@@ -682,10 +698,11 @@ void VulkanEngine::loadMeshes() {
             glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.4f));
             newNode->localTransform = translation * scale;
             newNode->worldTransform = glm::mat4{1.0f};
-            newNode->refreshTransform(glm::mat4(1.0f));
 
-            loadedNodes[meshAsset.name + (char)x + (char)y] = std::move(newNode);
+            loadedNodes["Spheres"]->children.push_back(newNode);
         }
+
+        loadedNodes["Spheres"]->refreshTransform(glm::mat4(1.0f));
     }
 }
 
@@ -833,6 +850,12 @@ void VulkanEngine::drawFrame() {
 }
 
 void VulkanEngine::updateScene(uint32_t currentImage) {
+    static auto startTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+    glm::mat4 rotation = glm::rotate(glm::mat4{1.0f}, time * glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    loadedNodes["Spheres"]->refreshTransform(rotation);
+
     mainDrawContext.opaqueSurfaces.clear();
     for (auto& pair : loadedNodes) {
         pair.second->draw(glm::mat4(1.0f), mainDrawContext);
@@ -970,8 +993,8 @@ void VulkanEngine::cleanup() {
 
     if (enableValidationLayers)
         DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
-    vkDestroySurfaceKHR(instance, surface, nullptr);
-    vkDestroyInstance(instance, nullptr);
+
+    mainDeletionQueue.flush();
 
     glfwDestroyWindow(window);
     glfwTerminate();
