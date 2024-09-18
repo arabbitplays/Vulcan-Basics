@@ -197,6 +197,10 @@ void VulkanEngine::setupDebugMessenger() {
         throw std::runtime_error("failed to set up debug messenger!");
     }
 
+    mainDeletionQueue.pushFunction([&]() {
+        DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+    });
+
     auto pAnalytics = new Analytics();
     analytics = *pAnalytics;
 
@@ -369,6 +373,11 @@ void VulkanEngine::createLogicalDevice() {
     if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
         throw std::runtime_error("failed to create logical device!");
     }
+
+    mainDeletionQueue.pushFunction([&]() {
+        vkDestroyDevice(device, nullptr);
+    });
+
     vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
     vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 }
@@ -500,6 +509,10 @@ void VulkanEngine::createDescriptorSetLayout() {
     layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     sceneDataDescriptorLayout = layoutBuilder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
+    mainDeletionQueue.pushFunction([&]() {
+        vkDestroyDescriptorSetLayout(device, sceneDataDescriptorLayout, nullptr);
+    });
+
     VkPushConstantRange range{};
     range.size = sizeof(ObjectData);
     range.offset = 0;
@@ -509,6 +522,10 @@ void VulkanEngine::createDescriptorSetLayout() {
 
 void VulkanEngine::initPipelines() {
     metalRoughMaterial.buildPipelines(this);
+
+    mainDeletionQueue.pushFunction([&]() {
+        metalRoughMaterial.clearRessources(device);
+    });
 }
 
 void VulkanEngine::createFrameBuffers() {
@@ -532,11 +549,19 @@ void VulkanEngine::createFrameBuffers() {
             throw std::runtime_error("failed to create framebuffer!");
         }
     }
+
+    mainDeletionQueue.pushFunction([&]() {
+        cleanupSwapChain();
+    });
 }
 
 void VulkanEngine::createCommandManager() {
     auto pCommandManager = new CommandManager(device, findQueueFamilies(physicalDevice));
     commandManager = *pCommandManager;
+
+    mainDeletionQueue.pushFunction([&]() {
+        commandManager.destroyCommandManager();
+    });
 }
 
 void VulkanEngine::createRessourceBuilder() {
@@ -549,6 +574,10 @@ void VulkanEngine::createDepthResources() {
 
     depthImage = ressourceBuilder.createImage({swapChainExtent.width, swapChainExtent.height, 1}, depthFormat,
                                               VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    mainDeletionQueue.pushFunction([&]() {
+        ressourceBuilder.destroyImage(depthImage);
+    });
 }
 
 VkFormat VulkanEngine::findDepthFormat() {
@@ -591,6 +620,11 @@ AllocatedImage VulkanEngine::loadTextureImage(std::string path) {
                                                 VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
     stbi_image_free(pixels);
+
+    mainDeletionQueue.pushFunction([=, this]() {
+        ressourceBuilder.destroyImage(textureImage);
+    });
+
     return textureImage;
 }
 
@@ -623,6 +657,13 @@ void VulkanEngine::createDefaultTextures() {
     }
     errorCheckerboardImage = ressourceBuilder.createImage(pixels.data(), VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_SRGB,
                                            VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    mainDeletionQueue.pushFunction([&]() {
+        ressourceBuilder.destroyImage(whiteImage);
+        ressourceBuilder.destroyImage(greyImage);
+        ressourceBuilder.destroyImage(blackImage);
+        ressourceBuilder.destroyImage(errorCheckerboardImage);
+    });
 }
 
 void VulkanEngine::createDefaultSamplers() {
@@ -639,6 +680,11 @@ void VulkanEngine::createDefaultSamplers() {
     if (vkCreateSampler(device, &samplerInfo, nullptr, &defaultSamplerLinear) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture sampler!");
     }
+
+    mainDeletionQueue.pushFunction([&]() {
+        vkDestroySampler(device, defaultSamplerLinear, nullptr);
+        vkDestroySampler(device, defaultSamplerNearest, nullptr);
+    });
 }
 
 void VulkanEngine::createDefaultMaterials() {
@@ -659,7 +705,11 @@ MaterialInstance VulkanEngine::createMetalRoughMaterial(float metallic, float ro
     VkDeviceSize bufferSize = sizeof(MetallicRoughness::MaterialConstants);
     AllocatedBuffer materialBuffer = ressourceBuilder.createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    materialBuffers.push_back(materialBuffer);
+
+    mainDeletionQueue.pushFunction([=, this]() {
+        ressourceBuilder.destroyBuffer(materialBuffer);
+    });
+
     void* data;
     vkMapMemory(device, materialBuffer.bufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, &constants, bufferSize);
@@ -677,8 +727,15 @@ void VulkanEngine::loadMeshes() {
 
     MeshAsset meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", "models/sphere.obj");
     meshAssets.push_back(meshAsset);
+
     meshAsset = meshAssetBuilder.LoadMeshAsset("VikingRoom", "models/viking_room.obj");
     meshAssets.push_back(meshAsset);
+
+    for (auto& meshAsset : meshAssets) {
+        mainDeletionQueue.pushFunction([&]() {
+            meshAssetBuilder.destroyMeshAsset(meshAsset);
+        });
+    }
 
     std::shared_ptr<Node> parentNode = std::make_shared<Node>();
     parentNode->localTransform = glm::mat4{1.0f};
@@ -717,6 +774,10 @@ void VulkanEngine::createUniformBuffers() {
                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
         vkMapMemory(device, sceneUniformBuffers[i].bufferMemory, 0, size, 0, &sceneUniformBuffersMapped[i]);
+
+        mainDeletionQueue.pushFunction([&, i]() {
+            ressourceBuilder.destroyBuffer(sceneUniformBuffers[i]);
+        });
     }
 }
 
@@ -726,6 +787,10 @@ void VulkanEngine::createDescriptorAllocator() {
             { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 },
     };
     descriptorAllocator.init(device, 4, poolRatios);
+
+    mainDeletionQueue.pushFunction([&]() {
+        descriptorAllocator.destroyPools(device);
+    });
 }
 
 void VulkanEngine::createDescriptorSets() {
@@ -775,6 +840,12 @@ void VulkanEngine::createSyncObjects() {
             || vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
             throw std::runtime_error("failed to create sync objects");
         }
+
+        mainDeletionQueue.pushFunction([&, i]() {
+            vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
+            vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+            vkDestroyFence(device, inFlightFences[i], nullptr);
+        });
     }
 }
 
@@ -954,48 +1025,7 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
 }
 
 void VulkanEngine::cleanup() {
-    ressourceBuilder.destroyImage(depthImage);
-
-    ressourceBuilder.destroyImage(whiteImage);
-    ressourceBuilder.destroyImage(greyImage);
-    ressourceBuilder.destroyImage(blackImage);
-    ressourceBuilder.destroyImage(errorCheckerboardImage);
-
-    cleanupSwapChain();
-
-    vkDestroySampler(device, defaultSamplerLinear, nullptr);
-    vkDestroySampler(device, defaultSamplerNearest, nullptr);
-
-    for (size_t i = 0; i < sceneUniformBuffers.size(); i++) {
-        ressourceBuilder.destroyBuffer(sceneUniformBuffers[i]);
-    }
-    for (auto& materialBuffer : materialBuffers) {
-        ressourceBuilder.destroyBuffer(materialBuffer);
-    }
-
-    descriptorAllocator.destroyPools(device);
-    vkDestroyDescriptorSetLayout(device, sceneDataDescriptorLayout, nullptr);
-
-    for (auto& meshAsset : meshAssets) {
-        meshAssetBuilder.destroyMeshAsset(meshAsset);
-    }
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
-        vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
-        vkDestroyFence(device, inFlightFences[i], nullptr);
-    }
-
-    commandManager.destroyCommandManager();
-
-    metalRoughMaterial.clearRessources(device);
-
-    vkDestroyDevice(device, nullptr);
-
-    if (enableValidationLayers)
-        DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
-
     mainDeletionQueue.flush();
-
     glfwDestroyWindow(window);
     glfwTerminate();
 }

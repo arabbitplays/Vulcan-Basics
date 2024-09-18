@@ -152,7 +152,6 @@ private:
 
     MaterialInstance defaultMetalRough;
     MetallicRoughness metalRoughMaterial;
-    std::vector<AllocatedBuffer> materialBuffers; // TODO weg damit da nur da zum destroyen am End
 
     void initWindow();
     void initVulkan();
