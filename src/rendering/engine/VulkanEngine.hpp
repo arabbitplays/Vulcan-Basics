@@ -69,7 +69,7 @@ struct MetallicRoughness {
     void clearRessources(VkDevice device);
 
     MaterialInstance writeMaterial(VkDevice device, MaterialPass pass,
-                                   const MaterialResources& resources, DescriptorAllocator allocator);
+                                   const MaterialResources& resources, DescriptorAllocator& allocator);
 };
 
 struct SceneData {
@@ -77,6 +77,8 @@ struct SceneData {
     glm::mat4 proj;
     glm::mat4 viewProj;
     glm::vec4 viewPos;
+    std::array<glm::vec4, 4> pointLightPositions;
+    std::array<glm::vec4, 4> pointLightColors;
     glm::vec4 ambientColor;
     glm::vec4 sunlightDirection; // w for sun power
     glm::vec4 sunlightColor;

@@ -37,8 +37,6 @@ void MeshAssetBuilder::loadModel(std::string path, std::vector<Vertex>& vertices
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    std::cout << "Load model " << path << std::endl;
-
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str())) {
         throw std::runtime_error("warn + err");
     }
@@ -74,8 +72,6 @@ void MeshAssetBuilder::loadModel(std::string path, std::vector<Vertex>& vertices
             indices.push_back(uniqueVertices[vertex]);
         }
     }
-
-    std::cout << "Finished loading model!" << std::endl;
 }
 
 AllocatedBuffer MeshAssetBuilder::createVertexBuffer(std::vector<Vertex>& vertices) {

@@ -41,7 +41,7 @@ private:
     std::deque<VkDescriptorBufferInfo> bufferInfos;
     std::vector<VkWriteDescriptorSet> writes;
 
-    const float GROW_RATIO = 1.5f;
+    const uint32_t GROW_RATIO = 2;
     const uint32_t MAX_SET_COUNT = 4092;
 };
 

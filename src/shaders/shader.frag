@@ -14,22 +14,26 @@ layout(location = 0) out vec4 outColor;
 void main() {
     vec3 n = normalize(inNormal);
     vec3 v = normalize(sceneData.viewPos.xyz - inPos);
-    vec3 l = normalize(sceneData.sunlightDirection.xyz);
-    vec3 h = normalize(l + v);
-
-    vec3 lightColor = sceneData.sunlightColor.xyz;
-    float lightStrength = sceneData.sunlightColor.w;
-    vec3 inRadiance = sceneData.sunlightColor.xyz * lightStrength;
 
     vec3 albedo = inColor * texture(colorTex, inUV).xyz;
     // TODO include texture
     float metallic = materialData.metalRoughFactors.x;
     float roughness = materialData.metalRoughFactors.y;
 
-    vec3 brdf = calcBRDF(l, v, n, h, albedo, metallic, roughness);
-    vec3 outRadiance = brdf * inRadiance * max(dot(n, l), 0.0);
-    vec3 ambient = vec3(0.01) * albedo;
+    vec3 outRadiance = vec3(0.0f);
+    for (int i = 0; i < POINT_LIGHT_COUNT; i++) {
+        vec3 l = normalize(sceneData.pointLightPositions[i] - inPos);
+        vec3 h = normalize(l + v);
 
+        float distance = length(sceneData.pointLightPositions[i] - inPos);
+        float attenuation = 1.0 / (distance * distance);
+        vec3 inRadiance = sceneData.pointLightColors[i].xyz * attenuation * sceneData.pointLightColors[i].w;
+
+        vec3 brdf = calcBRDF(l, v, n, h, albedo, metallic, roughness);
+        outRadiance += brdf * inRadiance * max(dot(n, l), 0.0);
+    }
+
+    vec3 ambient = vec3(0.01) * albedo;
     vec3 color = ambient + outRadiance;
 
     // gamma correction

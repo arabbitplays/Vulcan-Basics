@@ -3,6 +3,7 @@
 //
 
 #include <stdexcept>
+#include <cmath>
 #include "DescriptorAllocator.hpp"
 
 VkDescriptorPool DescriptorAllocator::getPool(VkDevice device) {
@@ -13,7 +14,7 @@ VkDescriptorPool DescriptorAllocator::getPool(VkDevice device) {
     } else {
         newPool = createPool(device, setsPerPool, ratios);
 
-        setsPerPool *= GROW_RATIO;
+        setsPerPool = setsPerPool * GROW_RATIO;
         if (setsPerPool > MAX_SET_COUNT) {
             setsPerPool = MAX_SET_COUNT;
         }

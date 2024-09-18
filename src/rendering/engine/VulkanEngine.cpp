@@ -672,7 +672,7 @@ void VulkanEngine::loadMeshes() {
             MeshAsset meshAsset = meshAssetBuilder.LoadMeshAsset("Sphere", MODEL_PATH);
             meshAssets.push_back(meshAsset);
             for (auto& surface : meshAsset.surfaces) {
-                MaterialInstance material = createMetalRoughMaterial(0.1f + 0.2f * (float)y, 0.1f + 0.2f * (float)x, glm::vec3{1, 0, 0});
+                MaterialInstance material = createMetalRoughMaterial(0.1f + 0.2f * (float)y, 0.01f + 0.2f * (float)x, glm::vec3{1, 1, 1});
                 surface.material = std::make_shared<Material>(material);
             }
 
@@ -709,7 +709,7 @@ void VulkanEngine::createDescriptorAllocator() {
             { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
             { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 },
     };
-    descriptorAllocator.init(device, 60, poolRatios);
+    descriptorAllocator.init(device, 4, poolRatios);
 }
 
 void VulkanEngine::createDescriptorSets() {
@@ -851,6 +851,10 @@ void VulkanEngine::updateScene(uint32_t currentImage) {
     sceneData.viewProj = sceneData.view * sceneData.proj;
 
     sceneData.viewPos = glm::vec4{ 0,0,6, 0 };
+    sceneData.pointLightPositions = {glm::vec4{1, 1, 3, 0}, glm::vec4{1, -1, 3, 0},
+                                     glm::vec4{-1, 1, 3, 0}, glm::vec4{-1, -1, 3, 0}};
+    sceneData.pointLightColors = {glm::vec4{1, 0, 0, 1}, glm::vec4{0, 1, 0, 1},
+                                  glm::vec4{0, 0, 1, 1}, glm::vec4{1, 1, 1, 1}};
 
     sceneData.ambientColor = glm::vec4(1.f);
     sceneData.sunlightColor = glm::vec4(1.f);
@@ -1076,7 +1080,7 @@ void MetallicRoughness::buildPipelines(VulkanEngine* engine) {
 }
 
 MaterialInstance MetallicRoughness::writeMaterial(VkDevice device, MaterialPass pass,
-                                                  const MaterialResources& resources, DescriptorAllocator allocator) {
+                                                  const MaterialResources& resources, DescriptorAllocator& allocator) {
     MaterialInstance instance;
     instance.materialPass = pass;
     if (pass == MaterialPass::Transparent) {
