@@ -731,6 +731,9 @@ void VulkanEngine::loadMeshes() {
     meshAsset = meshAssetBuilder.LoadMeshAsset("VikingRoom", "models/viking_room.obj");
     meshAssets.push_back(meshAsset);
 
+    meshAsset = meshAssetBuilder.LoadMeshAsset("Alexander", "models/alexander_chess_set_piece.obj");
+    meshAssets.push_back(meshAsset);
+
     for (auto& meshAsset : meshAssets) {
         mainDeletionQueue.pushFunction([&]() {
             meshAssetBuilder.destroyMeshAsset(meshAsset);
@@ -746,7 +749,7 @@ void VulkanEngine::loadMeshes() {
     for (int x = 0; x < 5; x++) {
         for (int y = 0; y < 5; y++) {
             std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
-            newNode->meshAsset = std::make_shared<MeshAsset>(meshAsset);
+            newNode->meshAsset = std::make_shared<MeshAsset>(meshAssets[0]);
 
             MaterialInstance material = createMetalRoughMaterial(0.1f + 0.2f * (float)y, 0.01f + 0.2f * (float)x, glm::vec3{1, 1, 1});
             newNode->material = std::make_shared<Material>(material);

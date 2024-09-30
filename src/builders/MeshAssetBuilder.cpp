@@ -53,10 +53,14 @@ void MeshAssetBuilder::loadModel(std::string path, std::vector<Vertex>& vertices
                     attrib.vertices[3 * index.vertex_index + 2]
             };
 
-            vertex.texCoord = {
-                    attrib.texcoords[2 * index.texcoord_index + 0],
-                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-            };
+            if (!attrib.texcoords.empty()) {
+                vertex.texCoord = {
+                        attrib.texcoords[2 * index.texcoord_index + 0],
+                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                };
+            } else {
+                vertex.texCoord = {0, 0};
+            }
 
             vertex.color = {1.0f, 1.0f, 1.0f};
             vertex.normal = {
