@@ -730,8 +730,9 @@ void VulkanEngine::loadMeshes() {
 
     meshAsset = meshAssetBuilder.LoadMeshAsset("VikingRoom", "models/viking_room.obj");
     meshAssets.push_back(meshAsset);
-
     meshAsset = meshAssetBuilder.LoadMeshAsset("Alexander", "models/alexander_chess_set_piece.obj");
+    meshAssets.push_back(meshAsset);
+    meshAsset = meshAssetBuilder.LoadMeshAsset("Marika", "models/tree_sentinel_chess_set_piece.obj");
     meshAssets.push_back(meshAsset);
 
     for (auto& meshAsset : meshAssets) {
@@ -746,7 +747,7 @@ void VulkanEngine::loadMeshes() {
     parentNode->children = {};
     loadedNodes["Spheres"] = std::move(parentNode);
 
-    for (int x = 0; x < 5; x++) {
+    /*for (int x = 0; x < 5; x++) {
         for (int y = 0; y < 5; y++) {
             std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
             newNode->meshAsset = std::make_shared<MeshAsset>(meshAssets[0]);
@@ -763,7 +764,21 @@ void VulkanEngine::loadMeshes() {
         }
 
         loadedNodes["Spheres"]->refreshTransform(glm::mat4(1.0f));
-    }
+    }*/
+
+    std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
+    newNode->meshAsset = std::make_shared<MeshAsset>(meshAssets[3]);
+
+    MaterialInstance material = createMetalRoughMaterial(1, .5, glm::vec3{1, 1, 1});
+    newNode->material = std::make_shared<Material>(material);
+
+    glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0));
+    glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.02f));
+    newNode->localTransform = translate * scale;
+    newNode->worldTransform = glm::mat4{1.0f};
+
+    loadedNodes["Spheres"]->children.push_back(newNode);
+    loadedNodes["Spheres"]->refreshTransform(glm::mat4(1.0f));
 }
 
 void VulkanEngine::createUniformBuffers() {
@@ -928,7 +943,8 @@ void VulkanEngine::updateScene(uint32_t currentImage) {
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
     glm::mat4 rotation = glm::rotate(glm::mat4{1.0f}, time * glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    loadedNodes["Spheres"]->refreshTransform(rotation);
+    glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(0, 1.f, 0));
+    loadedNodes["Spheres"]->refreshTransform(translate * rotation);
 
     mainDrawContext.opaqueSurfaces.clear();
     for (auto& pair : loadedNodes) {
@@ -936,10 +952,10 @@ void VulkanEngine::updateScene(uint32_t currentImage) {
     }
 
     SceneData sceneData{};
-    sceneData.view = glm::translate(glm::mat4(1.0f), glm::vec3{ 0,0,-6 });
-    /*sceneData.view = glm::lookAt(glm::vec3(4.0f, 4.0f, 4.0f),
+    //sceneData.view = glm::translate(glm::mat4(1.0f), glm::vec3{ 0,0,-6 });
+    sceneData.view = glm::lookAt(glm::vec3(4.0f, 4.0f, 4.0f),
                            glm::vec3(0.0f, 0.0f, 0.0f),
-                           glm::vec3(0.0f, 0.0f, 1.0f));*/
+                           glm::vec3(0.0f, 0.0f, 1.0f));
     sceneData.proj = glm::perspective(glm::radians(45.0f),
                                 swapChainExtent.width / (float) swapChainExtent.height,
                                 0.1f, 10.0f);
